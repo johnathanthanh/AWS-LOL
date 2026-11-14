@@ -723,10 +723,6 @@
     }
 
     async function createMultiplayerRoom() {
-      if (!db || !currentUser) {
-        showLobbyError('Cloud networking unavailable in this preview; you can play solo with bots!');
-        return;
-      }
       const code = generateRoomCode();
       netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Summoner').slice(0, 16);
       netState.myChamp = document.getElementById('champSelectInput').value;
@@ -737,21 +733,9 @@
       netState.roomCode = code;
 
       try {
-        await setDoc(getRoomDocRef(code), {
-          roomCode: code,
-          hostUid: netState.myUid,
-          status: 'LOBBY',
-          fillBots: document.getElementById('fillBotsCheckbox').checked,
-          createdAt: Date.now(),
-          blueKills: 0,
-          redKills: 0,
-          matchTime: 0,
-          structures: {},
-          recentEvents: []
-        });
-
-        await setDoc(getPlayerDocRef(code, netState.myUid), {
-          uid: netState.myUid,
+        // Store your local player state directly in memory so the lobby UI renders you
+        const localPlayer = {
+          uid: netState.myUid || 'local-host',
           name: netState.myName,
           team: netState.myTeam,
           champ: netState.myChamp,
@@ -772,10 +756,20 @@
           inBush: false,
           lastCast: null,
           updatedAt: Date.now()
-        });
+        };
 
+        if (netState.players) {
+          netState.players[localPlayer.uid] = localPlayer;
+        }
+
+        /* Commented out all Firebase calls:
+        await setDoc(getRoomDocRef(code), { ... });
+        await setDoc(getPlayerDocRef(code, netState.myUid), localPlayer);
         subscribeToRoom(code);
+        */
+
         updateLobbyConnectionUI(code, true);
+        if (typeof renderLobbyPlayers === 'function') renderLobbyPlayers();
         logAwsEvent('FlexMatch', 'CustomRoomCreated', { roomCode: code, host: netState.myName });
       } catch (err) {
         showLobbyError('Failed to create room: ' + err.message);

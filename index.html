@@ -724,10 +724,9 @@
     }
 
     async function createMultiplayerRoom() {
-      if (!db || !currentUser) {
-        showLobbyError('Cloud networking unavailable in this preview; you can play solo with bots!');
-        return;
-      }
+      const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+      joinMultiplayerRoom(roomCode);
+    }
       const code = generateRoomCode();
       netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Summoner').slice(0, 16);
       netState.myChamp = document.getElementById('champSelectInput').value;
@@ -784,10 +783,8 @@
     }
 
     async function joinMultiplayerRoom(rawCode) {
-      if (!db || !currentUser) {
-        showLobbyError('Cloud networking unavailable in this preview.');
-        return;
-      }
+      const roomCode = rawCode || document.getElementById('room-input')?.value.trim();
+      
       const code = rawCode.trim().toUpperCase();
       if (code.length !== 6) {
         showLobbyError('Please enter a valid 6-character Room Code.');

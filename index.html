@@ -666,6 +666,27 @@
       processedChatIds: new Set()
     };
 
+    // --- ADD THIS RIGHT BELOW netState ---
+    const localNetChannel = new BroadcastChannel('aether_rift_local_sync');
+
+    localNetChannel.onmessage = (event) => {
+      const { type, roomCode, payload } = event.data;
+      // Ignore messages from different room codes or from yourself
+      if (!netState.roomCode || roomCode !== netState.roomCode || payload?.uid === netState.myUid) return;
+
+      if (type === 'PLAYER_SYNC') {
+        netState.remotePlayers[payload.uid] = payload;
+        // Refresh lobby player list if still in lobby
+        if (typeof renderLobbyPlayers === 'function') renderLobbyPlayers();
+        if (typeof updateLobbyConnectionUI === 'function') updateLobbyConnectionUI(netState.roomCode, netState.isHost);
+      }
+      else if (type === 'START_MATCH') {
+        if (typeof launchMatchFromLobby === 'function') {
+          launchMatchFromLobby(false);
+        }
+      }
+    };
+
     async function initFirebase() {
       try {
         if (typeof __firebase_config === 'undefined') {

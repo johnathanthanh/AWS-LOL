@@ -777,37 +777,39 @@
     }
 
     async function joinMultiplayerRoom(rawCode) {
-      if (!db || !currentUser) {
-        showLobbyError('Cloud networking unavailable in this preview.');
-        return;
-      }
-      const code = rawCode.trim().toUpperCase();
+      // Bypassed the Firebase cloud check:
+      // if (!db || !currentUser) {
+      //   showLobbyError('Cloud networking unavailable in this preview.');
+      //   return;
+      // }
+      
+      const code = (rawCode || document.getElementById('room-input')?.value || '').trim().toUpperCase();
       if (code.length !== 6) {
         showLobbyError('Please enter a valid 6-character Room Code.');
         return;
       }
 
       try {
+        /* Commented out Firebase database lookups and writes:
         const snap = await getDoc(getRoomDocRef(code));
         if (!snap.exists()) {
           showLobbyError(`Room "${code}" not found. Double-check the code with your friend.`);
           return;
         }
         const roomData = snap.data();
+        */
+
         netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Player').slice(0, 16);
         netState.myChamp = document.getElementById('champSelectInput').value;
         netState.myLane = document.getElementById('laneSelectInput').value;
-        netState.isHost = roomData.hostUid === netState.myUid;
+        netState.isHost = false; // Joining player is a guest
         netState.roomCode = code;
-
-        // Auto-assign to team with fewer players so friends can either co-op or 1v1
-        const existingPlayers = Object.values(netState.remotePlayers);
-        const blueCount = existingPlayers.filter(p => p.team === 'BLUE').length;
-        const redCount = existingPlayers.filter(p => p.team === 'RED').length;
-        netState.myTeam = redCount < blueCount ? 'RED' : 'BLUE';
+        netState.myTeam = 'RED'; // Default joining team for local testing
         netState.myReady = true;
 
-        const spawn = netState.myTeam === 'BLUE' ? { x: 360, y: 2240 } : { x: 2240, y: 360 };
+        const spawn = { x: 2240, y: 360 };
+
+        /*
         await setDoc(getPlayerDocRef(code, netState.myUid), {
           uid: netState.myUid,
           name: netState.myName,
@@ -833,13 +835,11 @@
         });
 
         subscribeToRoom(code);
-        updateLobbyConnectionUI(code, netState.isHost);
-        logAwsEvent('FlexMatch', 'JoinedMultiplayerRoom', { roomCode: code, team: netState.myTeam });
+        */
 
-        // If the match is already in progress, jump straight into the arena!
-        if (roomData.status === 'IN_GAME') {
-          setTimeout(() => launchMatchFromLobby(false), 350);
-        }
+        updateLobbyConnectionUI(code, netState.isHost);
+        console.log("Locally joined room:", code);
+
       } catch (err) {
         showLobbyError('Failed to join room: ' + err.message);
       }

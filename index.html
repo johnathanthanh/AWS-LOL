@@ -1,0 +1,2890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aether Rift — Multiplayer Cloud MOBA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    input, textarea {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #070b14;
+      font-family: 'Inter', sans-serif;
+      color: #e2e8f0;
+    }
+    .font-display { font-family: 'Cinzel', serif; }
+    .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0b111e; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #ff9900; }
+
+    .moba-panel {
+      background: linear-gradient(180deg, rgba(13, 20, 34, 0.95) 0%, rgba(8, 12, 22, 0.98) 100%);
+      border: 1px solid rgba(200, 170, 110, 0.4);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 230, 170, 0.15);
+    }
+    .aws-panel {
+      background: rgba(11, 17, 29, 0.95);
+      border-left: 1px solid rgba(255, 153, 0, 0.28);
+      backdrop-filter: blur(12px);
+    }
+    .ability-btn {
+      transition: transform 0.08s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    .ability-btn:active:not(:disabled) { transform: scale(0.94); }
+    .ability-btn:hover:not(:disabled) {
+      border-color: #f59e0b;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
+    }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 12px rgba(255, 153, 0, 0.35); }
+      50% { box-shadow: 0 0 24px rgba(255, 153, 0, 0.75); }
+    }
+    .aws-pulse { animation: pulseGlow 2.4s infinite ease-in-out; }
+    canvas { display: block; cursor: crosshair; }
+  </style>
+</head>
+<body class="flex flex-col h-screen w-screen overflow-hidden relative">
+
+  <!-- TOP HUD BAR -->
+  <header class="h-11 bg-[#090e1a]/95 border-b border-slate-800/90 px-3 flex items-center justify-between z-30 shrink-0">
+    <div class="flex items-center gap-2.5">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded bg-gradient-to-br from-amber-400 to-amber-700 flex items-center justify-center text-slate-950 font-display font-extrabold text-xs shadow">
+          AR
+        </div>
+        <span class="font-display font-bold text-amber-300 tracking-wider text-sm hidden sm:inline">AETHER RIFT</span>
+      </div>
+      <div class="h-4 w-[1px] bg-slate-700"></div>
+
+      <!-- Room Code Pill in Header -->
+      <button id="headerRoomBadge" class="text-[11px] px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-mono-code flex items-center gap-1.5 transition" title="Click to open Multiplayer Lobby or copy Room Code">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>ROOM: <b id="headerRoomCodeText">SOLO</b></span>
+      </button>
+
+      <button id="cameraLockBtn" class="text-[11px] px-2 py-1 rounded bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 text-slate-200 font-medium transition hidden md:inline-flex items-center gap-1">
+        <span>Cam:</span> <span id="camLockLabel" class="text-amber-400 font-semibold">Locked (Y)</span>
+      </button>
+    </div>
+
+    <!-- Center: Classic MOBA Scoreboard -->
+    <div class="flex items-center gap-3 sm:gap-5 bg-slate-900/90 border border-amber-500/25 px-3.5 py-1 rounded-full shadow-inner">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]"></span>
+        <span id="blueKillsEl" class="font-bold text-sky-400 text-sm">0</span>
+      </div>
+      <span class="text-slate-500 text-xs font-bold">VS</span>
+      <div class="flex items-center gap-2">
+        <span id="redKillsEl" class="font-bold text-rose-500 text-sm">0</span>
+        <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>
+      </div>
+      <div class="h-3.5 w-[1px] bg-slate-700"></div>
+      <div id="matchTimerEl" class="font-mono-code text-xs text-slate-200 font-semibold">00:00</div>
+      <div class="h-3.5 w-[1px] bg-slate-700 hidden sm:block"></div>
+      <div class="hidden sm:flex items-center gap-2.5 text-xs font-mono-code">
+        <span class="text-slate-300">KDA <b id="playerKdaEl" class="text-amber-300">0/0/0</b></span>
+        <span class="text-slate-300">CS <b id="playerCsEl" class="text-emerald-400">0</b></span>
+      </div>
+    </div>
+
+    <!-- Right: AWS Telemetry + Multiplayer Lobby Button -->
+    <div class="flex items-center gap-2">
+      <div class="hidden xl:flex items-center gap-2 bg-[#121a2b] border border-amber-500/30 rounded-md px-2.5 py-1 text-[11px] font-mono-code">
+        <span class="text-emerald-400">GameLift: <b id="topServerStatus">SYNCED</b></span>
+        <span class="text-slate-600">|</span>
+        <span class="text-amber-400" id="topPingEl">22ms</span>
+        <span class="text-slate-600">|</span>
+        <span class="text-cyan-300" id="topTickEl">60Hz</span>
+      </div>
+
+      <button id="openLobbyBtn" class="text-xs px-2.5 py-1.5 rounded bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/60 text-sky-300 font-semibold flex items-center gap-1.5 transition">
+        <span>👥</span>
+        <span>Multiplayer</span>
+      </button>
+
+      <button id="openArchModalBtn" class="text-xs px-2.5 py-1.5 rounded bg-[#ff9900]/15 hover:bg-[#ff9900]/25 border border-[#ff9900]/60 text-[#ff9900] font-semibold hidden sm:flex items-center gap-1.5 transition">
+        <span>AWS</span>
+      </button>
+
+      <button id="toggleAwsDrawerBtn" class="text-xs px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-medium transition">
+        HUD
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="flex-1 flex relative overflow-hidden">
+    
+    <!-- GAME ARENA CONTAINER -->
+    <div id="canvasContainer" class="flex-1 relative overflow-hidden bg-[#060a12]">
+      <canvas id="gameCanvas"></canvas>
+
+      <!-- Floating Top Announcer Banner -->
+      <div id="announcerBanner" class="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-full bg-slate-950/90 border border-amber-400/50 text-amber-300 font-display font-bold text-xs sm:text-sm tracking-wider shadow-lg opacity-0 transition-opacity duration-300 z-20">
+        WELCOME TO AETHER RIFT
+      </div>
+
+      <!-- In-Game Multiplayer Chat Overlay (Left-Middle) -->
+      <div id="chatContainer" class="absolute left-3 top-3 w-72 sm:w-80 z-20 flex flex-col gap-1.5 pointer-events-none">
+        <div id="chatMessagesBox" class="max-h-36 overflow-y-auto space-y-1 text-[11px] font-mono-code bg-slate-950/65 backdrop-blur-sm border border-slate-800/80 rounded-lg p-2 pointer-events-auto">
+          <div class="text-amber-300/90">[System] Press <b>Enter</b> to chat with teammates & enemies!</div>
+        </div>
+        <div id="chatInputWrapper" class="hidden pointer-events-auto flex items-center gap-1">
+          <input id="chatInput" type="text" maxlength="100" placeholder="Send message to match..." class="flex-1 bg-slate-950/95 border border-amber-400/60 rounded px-2.5 py-1 text-xs text-white focus:outline-none">
+          <button id="chatSendBtn" class="px-2.5 py-1 rounded bg-amber-500 text-slate-950 font-bold text-xs">Send</button>
+        </div>
+      </div>
+
+      <!-- Respawn Overlay -->
+      <div id="respawnOverlay" class="hidden pointer-events-none absolute inset-0 bg-rose-950/25 backdrop-blur-[2px] flex flex-col items-center justify-center z-20">
+        <div class="moba-panel px-7 py-5 rounded-xl text-center">
+          <div class="text-rose-400 font-display font-bold text-xl tracking-wider">YOU HAVE BEEN SLAIN</div>
+          <div class="text-slate-300 text-xs mt-1">Respawning champion at Fountain...</div>
+          <div id="respawnTimerText" class="text-3xl font-mono-code font-bold text-amber-400 mt-2">5.0s</div>
+        </div>
+      </div>
+
+      <!-- Victory / Defeat Overlay -->
+      <div id="gameOverOverlay" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center z-40">
+        <div class="moba-panel p-8 rounded-2xl max-w-md w-full mx-4 text-center">
+          <div id="gameOverTitle" class="font-display text-3xl font-extrabold tracking-widest text-amber-400">VICTORY</div>
+          <p id="gameOverSubtitle" class="text-slate-300 text-sm mt-2">Enemy Nexus destroyed! Match results synced to cloud.</p>
+          <div class="mt-5 bg-slate-900/90 border border-slate-700/80 rounded-lg p-3.5 text-left font-mono-code text-xs space-y-1.5">
+            <div class="flex justify-between"><span class="text-slate-400">Room / Match ID:</span><span class="text-cyan-400" id="endMatchId">gl-sess-8942</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Final KDA:</span><span class="text-amber-300" id="endKda">0 / 0 / 0</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">MMR Rating Delta:</span><span class="text-emerald-400" id="endMmr">+24 LP (1,842 MMR)</span></div>
+          </div>
+          <button id="playAgainBtn" class="mt-6 w-full py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-sm shadow-lg transition">
+            Return to Multiplayer Lobby
+          </button>
+        </div>
+      </div>
+
+      <!-- BOTTOM-LEFT: Champion Stats & Quick Item Shop -->
+      <div class="absolute bottom-3 left-3 z-20 flex flex-col gap-2">
+        <div id="shopPanel" class="hidden moba-panel rounded-xl p-3 w-72 shadow-2xl">
+          <div class="flex items-center justify-between border-b border-slate-700/80 pb-2 mb-2">
+            <span class="font-display text-xs font-bold text-amber-300 tracking-wider">FOUNTAIN & REMOTE SHOP</span>
+            <button id="closeShopBtn" class="text-slate-400 hover:text-white text-xs px-1.5">✕</button>
+          </div>
+          <div class="space-y-2 text-xs" id="shopItemsList"></div>
+        </div>
+
+        <div class="moba-panel rounded-xl p-2.5 flex items-center gap-3">
+          <div class="relative">
+            <div id="champAvatarCircle" class="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-900 border-2 border-amber-400 flex items-center justify-center font-display font-extrabold text-white text-xs shadow-lg">
+              LUX
+            </div>
+            <span id="champLevelBadge" class="absolute -bottom-1 -right-1 bg-slate-950 border border-amber-400 text-amber-300 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+              1
+            </span>
+          </div>
+          <div class="hidden sm:grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] font-mono-code">
+            <div class="text-slate-400">AD: <span id="statAd" class="text-slate-100 font-semibold">62</span></div>
+            <div class="text-slate-400">AP: <span id="statAp" class="text-cyan-300 font-semibold">45</span></div>
+            <div class="text-slate-400">ARM: <span id="statArm" class="text-slate-100 font-semibold">28</span></div>
+            <div class="text-slate-400">SPD: <span id="statSpd" class="text-emerald-300 font-semibold">340</span></div>
+          </div>
+          <button id="toggleShopBtn" class="ml-1 px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/60 text-amber-300 text-xs font-bold flex flex-col items-center transition">
+            <span class="text-[10px] uppercase tracking-wider text-amber-200/80">Shop (B)</span>
+            <span id="playerGoldEl" class="font-mono-code text-amber-400">500g</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- BOTTOM-CENTER: Classic MOBA Ability Bar -->
+      <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 moba-panel rounded-2xl px-3.5 py-2.5 flex flex-col items-center gap-2 shadow-2xl max-w-[95vw]">
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <button id="btnQ" onclick="triggerAbility('Q')" class="ability-btn relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg bg-slate-900 border border-cyan-500/60 flex flex-col items-center justify-center overflow-hidden" title="[Q] Arcane Lance (50 Mana)">
+            <svg class="w-5 h-5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            <span class="absolute bottom-0.5 right-1 text-[10px] font-bold text-amber-300">Q</span>
+            <span class="absolute top-0.5 left-1 text-[9px] font-mono-code text-sky-300">50</span>
+            <div id="cdOverlayQ" class="hidden absolute inset-0 bg-slate-950/85 flex items-center justify-center font-mono-code font-bold text-sm text-white">0.0</div>
+          </button>
+
+          <button id="btnW" onclick="triggerAbility('W')" class="ability-btn relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg bg-slate-900 border border-indigo-500/60 flex flex-col items-center justify-center overflow-hidden" title="[W] Singularity Pulse (65 Mana)">
+            <svg class="w-5 h-5 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+            <span class="absolute bottom-0.5 right-1 text-[10px] font-bold text-amber-300">W</span>
+            <span class="absolute top-0.5 left-1 text-[9px] font-mono-code text-sky-300">65</span>
+            <div id="cdOverlayW" class="hidden absolute inset-0 bg-slate-950/85 flex items-center justify-center font-mono-code font-bold text-sm text-white">0.0</div>
+          </button>
+
+          <button id="btnE" onclick="triggerAbility('E')" class="ability-btn relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg bg-slate-900 border border-emerald-500/60 flex flex-col items-center justify-center overflow-hidden" title="[E] Aegis Surge Dash + Shield (55 Mana)">
+            <svg class="w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span class="absolute bottom-0.5 right-1 text-[10px] font-bold text-amber-300">E</span>
+            <span class="absolute top-0.5 left-1 text-[9px] font-mono-code text-sky-300">55</span>
+            <div id="cdOverlayE" class="hidden absolute inset-0 bg-slate-950/85 flex items-center justify-center font-mono-code font-bold text-sm text-white">0.0</div>
+          </button>
+
+          <button id="btnR" onclick="triggerAbility('R')" class="ability-btn relative w-12 h-12 sm:w-13 sm:h-13 rounded-lg bg-gradient-to-b from-amber-950/80 to-slate-900 border-2 border-amber-400/80 flex flex-col items-center justify-center overflow-hidden" title="[R] Final Spark Orbital Laser (100 Mana)">
+            <svg class="w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span class="absolute bottom-0.5 right-1 text-[10px] font-bold text-amber-300">R</span>
+            <span class="absolute top-0.5 left-1 text-[9px] font-mono-code text-sky-300">100</span>
+            <div id="cdOverlayR" class="hidden absolute inset-0 bg-slate-950/85 flex items-center justify-center font-mono-code font-bold text-sm text-white">0.0</div>
+          </button>
+
+          <div class="h-8 w-[1px] bg-slate-700/80 mx-0.5"></div>
+
+          <button id="btnD" onclick="triggerAbility('D')" class="ability-btn relative w-9 h-9 sm:w-10 sm:h-10 rounded-md bg-slate-900 border border-yellow-400/50 flex flex-col items-center justify-center overflow-hidden" title="[D] Flash">
+            <span class="text-yellow-300 font-bold text-xs">⚡</span>
+            <span class="absolute bottom-0 right-1 text-[9px] font-bold text-slate-300">D</span>
+            <div id="cdOverlayD" class="hidden absolute inset-0 bg-slate-950/85 flex items-center justify-center font-mono-code font-bold text-xs text-white">0</div>
+          </button>
+
+          <button id="btnF" onclick="triggerAbility('F')" class="ability-btn relative w-9 h-9 sm:w-10 sm:h-10 rounded-md bg-slate-900 border border-lime-400/50 flex flex-col items-center justify-center overflow-hidden" title="[F] Heal">
+            <span class="text-lime-400 font-bold text-xs">✚</span>
+            <span class="absolute bottom-0 right-1 text-[9px] font-bold text-slate-300">F</span>
+            <div id="cdOverlayF" class="hidden absolute inset-0 bg-slate-950/85 flex items-center justify-center font-mono-code font-bold text-xs text-white">0</div>
+          </button>
+        </div>
+
+        <!-- HP / Mana / XP Bars -->
+        <div class="w-full space-y-1">
+          <div class="relative h-4 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-700/90">
+            <div id="hpBarFill" class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-100" style="width: 100%"></div>
+            <div id="shieldBarFill" class="absolute top-0 right-0 h-full bg-slate-100/60 transition-all duration-100" style="width: 0%"></div>
+            <span id="hpBarText" class="absolute inset-0 flex items-center justify-center text-[10px] font-mono-code font-bold text-white drop-shadow">650 / 650</span>
+          </div>
+          <div class="relative h-3 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-700/90">
+            <div id="manaBarFill" class="h-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-100" style="width: 100%"></div>
+            <span id="manaBarText" class="absolute inset-0 flex items-center justify-center text-[9px] font-mono-code font-semibold text-white drop-shadow">400 / 400</span>
+          </div>
+          <div class="relative h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
+            <div id="xpBarFill" class="h-full bg-amber-400 transition-all duration-200" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM-RIGHT: Tactical Minimap -->
+      <div class="absolute bottom-3 right-3 z-20 moba-panel p-1.5 rounded-xl shadow-2xl hidden sm:block">
+        <canvas id="minimapCanvas" width="164" height="164" class="rounded-lg bg-[#070d17] cursor-pointer"></canvas>
+        <div class="flex justify-between items-center px-1 pt-1 text-[9px] font-mono-code text-slate-400">
+          <span>FOG OF WAR: ON</span>
+          <span class="text-amber-400/90">CLICK TO PAN</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT SIDEBAR: AWS CLOUD TELEMETRY & LIVE NETWORK SYNC HUD -->
+    <aside id="awsTelemetryDrawer" class="aws-panel w-80 lg:w-96 flex flex-col z-30 shrink-0 transition-all duration-300 overflow-hidden hidden md:flex">
+      <div class="p-3 border-b border-slate-800 flex items-center justify-between bg-[#0f172a]">
+        <div class="flex items-center gap-2">
+          <span class="px-1.5 py-0.5 rounded bg-[#ff9900] text-slate-950 font-extrabold text-[10px] tracking-wider">AWS</span>
+          <h2 class="text-xs font-bold tracking-wide text-slate-100 uppercase">GameLift & Network Sync</h2>
+        </div>
+        <span id="tickRateToggle" class="cursor-pointer text-[10px] font-mono-code px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-400">
+          60Hz Tick
+        </span>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
+        <!-- 1. Amazon GameLift Dedicated Server Status -->
+        <div class="bg-[#0d1526] border border-slate-800 rounded-lg p-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-semibold text-[#ff9900] flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Multiplayer Session Node
+            </span>
+            <span id="netRoleBadge" class="font-mono-code text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded">HOST AUTH</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 font-mono-code text-[11px]">
+            <div class="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+              <div class="text-slate-500 text-[9px]">FLEET / INSTANCE</div>
+              <div class="text-slate-200 font-semibold">c7g.large (ARM64)</div>
+            </div>
+            <div class="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+              <div class="text-slate-500 text-[9px]">ACTIVE ROOM</div>
+              <div id="hudRoomCode" class="text-cyan-300 font-semibold">LOCAL-SOLO</div>
+            </div>
+            <div class="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+              <div class="text-slate-500 text-[9px]">NET RTT / JITTER</div>
+              <div class="text-amber-300 font-semibold"><span id="hudPingVal">22</span>ms ± 1.4ms</div>
+            </div>
+            <div class="bg-slate-900/80 p-2 rounded border border-slate-800/80">
+              <div class="text-slate-500 text-[9px]">HUMAN / BOT SYNC</div>
+              <div class="text-emerald-300 font-semibold"><span id="hudHumansVal">1</span>H / <span id="hudEntitiesVal">24</span>E</div>
+            </div>
+          </div>
+          <div class="mt-2.5 space-y-1">
+            <div class="flex justify-between text-[10px] font-mono-code text-slate-400">
+              <span>Authoritative Frame Budget</span>
+              <span id="hudFrameTime" class="text-slate-200">2.4ms / 16.6ms</span>
+            </div>
+            <div class="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+              <div id="hudCpuBar" class="h-full bg-gradient-to-r from-emerald-500 to-amber-400 transition-all duration-300" style="width: 24%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Active Roster (Human Players + AI Bots) -->
+        <div class="bg-[#0d1526] border border-slate-800 rounded-lg p-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-semibold text-sky-400">Match Roster (Blue vs Red)</span>
+            <button id="sidebarLobbyBtn" class="px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/50 text-sky-300 font-bold text-[10px] transition">
+              Invite Friends
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[10px] font-mono-code">
+            <div class="space-y-1 bg-sky-950/20 border border-sky-500/20 p-1.5 rounded">
+              <div class="text-sky-400 font-bold border-b border-sky-500/20 pb-0.5">BLUE TEAM</div>
+              <div id="blueRolesList" class="space-y-0.5 text-slate-300"></div>
+            </div>
+            <div class="space-y-1 bg-rose-950/20 border border-rose-500/20 p-1.5 rounded">
+              <div class="text-rose-400 font-bold border-b border-rose-500/20 pb-0.5">RED TEAM</div>
+              <div id="redRolesList" class="space-y-0.5 text-slate-300"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Live Cloud Event Stream -->
+        <div class="bg-[#0d1526] border border-slate-800 rounded-lg p-3 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-semibold text-purple-400">EventBridge → SQS / State Sync</span>
+            <button id="clearLogsBtn" class="text-[10px] text-slate-400 hover:text-white">Clear</button>
+          </div>
+          <div id="awsEventLog" class="h-44 overflow-y-auto space-y-2 font-mono-code text-[10px] pr-1"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 1: REAL-TIME MULTIPLAYER LOBBY (CREATE / JOIN ROOM + TEAM SETUP)
+       ========================================================================= -->
+  <div id="multiplayerLobbyModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-5">
+    <div class="moba-panel rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+      <!-- Lobby Header -->
+      <div class="px-5 py-4 bg-[#0f172a] border-b border-amber-500/30 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center font-display font-extrabold text-slate-950 text-sm shadow">
+            AR
+          </div>
+          <div>
+            <h2 class="font-display font-bold text-amber-300 text-base sm:text-lg tracking-wider">AETHER RIFT — MULTIPLAYER LOBBY</h2>
+            <p class="text-[11px] text-slate-400">Play real-time 5v5, 1v1, or Co-op over the internet with friends</p>
+          </div>
+        </div>
+        <button id="closeLobbyBtn" class="text-slate-400 hover:text-white text-sm px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700">
+          Play Solo / Resume
+        </button>
+      </div>
+
+      <!-- Lobby Body -->
+      <div class="p-5 overflow-y-auto space-y-5">
+        
+        <!-- STEP 1: Player Profile + Create or Join Room -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Left: Summoner Name & Champion Preset -->
+          <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="text-xs font-bold uppercase tracking-wider text-amber-400">1. Your Summoner & Champion</div>
+            <div>
+              <label class="block text-[11px] text-slate-400 mb-1">Summoner Name</label>
+              <input id="summonerNameInput" type="text" maxlength="16" value="Summoner" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Champion Class</label>
+                <select id="champSelectInput" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none">
+                  <option value="LUX">Lux (Arcane Mage)</option>
+                  <option value="EZREAL">Ezreal (Mystic Marksman)</option>
+                  <option value="AHRI">Ahri (Spirit Assassin)</option>
+                  <option value="GAREN">Garen (Vanguard Bruiser)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Lane Assignment</label>
+                <select id="laneSelectInput" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none">
+                  <option value="MID">Mid Lane</option>
+                  <option value="TOP">Top Lane</option>
+                  <option value="BOT">Bot Lane</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Create Room or Join Friend's Room -->
+          <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3">
+            <div class="text-xs font-bold uppercase tracking-wider text-sky-400">2. Network Room Connection</div>
+            
+            <!-- Active Room Banner (Shown when connected to a room) -->
+            <div id="activeRoomBanner" class="hidden bg-emerald-950/40 border border-emerald-500/40 rounded-lg p-3 space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] text-emerald-300 font-semibold">Connected to Network Room</span>
+                <span id="lobbyRoleTag" class="text-[10px] font-mono-code px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">HOST</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 font-mono-code text-base font-extrabold tracking-widest text-amber-300 text-center" id="lobbyRoomCodeDisplay">
+                  ------
+                </div>
+                <button id="copyRoomCodeBtn" class="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition">
+                  Copy Code
+                </button>
+              </div>
+              <div id="copyFeedbackText" class="text-[10px] text-emerald-400 hidden">✓ Room code copied! Share it with your friends so they can join.</div>
+            </div>
+
+            <!-- Create / Join Controls -->
+            <div id="roomConnectControls" class="space-y-2.5">
+              <button id="createRoomBtn" class="w-full py-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs shadow transition">
+                + Create New Multiplayer Room
+              </button>
+              <div class="flex items-center gap-2">
+                <input id="joinRoomCodeInput" type="text" maxlength="6" placeholder="ENTER 6-CHAR CODE" class="flex-1 bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-lg px-3 py-1.5 font-mono-code text-xs uppercase tracking-widest text-white focus:outline-none">
+                <button id="joinRoomBtn" class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sky-300 font-bold text-xs transition">
+                  Join Room
+                </button>
+              </div>
+              <div id="lobbyErrorMsg" class="text-[11px] text-rose-400 hidden"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: Connected Players Roster (Blue vs Red Teams) -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-xs font-bold uppercase tracking-wider text-amber-300">
+              3. Connected Players & Team Setup (<span id="lobbyPlayerCount">1</span> Connected)
+            </div>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                <input id="fillBotsCheckbox" type="checkbox" checked class="accent-amber-400 rounded">
+                <span>Fill Empty Lanes with AI Bots</span>
+              </label>
+              <button id="switchTeamBtn" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-semibold text-amber-300 transition">
+                ⇄ Switch Team
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Blue Team Column -->
+            <div class="bg-sky-950/20 border border-sky-500/30 rounded-lg p-3">
+              <div class="flex items-center justify-between border-b border-sky-500/20 pb-1.5 mb-2">
+                <span class="font-display font-bold text-xs text-sky-400 tracking-wider">BLUE TEAM (SOUTH-WEST)</span>
+                <span class="text-[10px] font-mono-code text-sky-300/80" id="blueTeamCount">1 / 5</span>
+              </div>
+              <div id="lobbyBlueList" class="space-y-1.5 text-xs"></div>
+            </div>
+
+            <!-- Red Team Column -->
+            <div class="bg-rose-950/20 border border-rose-500/30 rounded-lg p-3">
+              <div class="flex items-center justify-between border-b border-rose-500/20 pb-1.5 mb-2">
+                <span class="font-display font-bold text-xs text-rose-400 tracking-wider">RED TEAM (NORTH-EAST)</span>
+                <span class="text-[10px] font-mono-code text-rose-300/80" id="redTeamCount">0 / 5</span>
+              </div>
+              <div id="lobbyRedList" class="space-y-1.5 text-xs"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lobby Footer Actions -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+          <div class="text-[11px] text-slate-400">
+            Controls: <b class="text-slate-200">Right-Click / WASD</b> Move • <b class="text-slate-200">Q/W/E/R</b> Spells • <b class="text-slate-200">D/F</b> Flash/Heal • <b class="text-slate-200">B</b> Shop • <b class="text-slate-200">Enter</b> Chat
+          </div>
+          <div class="flex items-center gap-2.5 w-full sm:w-auto">
+            <button id="toggleReadyBtn" class="flex-1 sm:flex-initial px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-emerald-500/50 text-emerald-300 font-bold text-xs transition">
+              ✓ Ready Up
+            </button>
+            <button id="startMultiplayerMatchBtn" class="flex-1 sm:flex-initial px-6 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-extrabold text-xs tracking-wider uppercase shadow-lg transition">
+              Launch Match ▶
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: AWS CLOUD ARCHITECTURE INSPECTOR -->
+  <div id="awsArchModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-[#0b1220] border border-[#ff9900]/50 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 bg-[#111a2e] border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="px-2 py-0.5 rounded bg-[#ff9900] text-slate-950 font-extrabold text-xs">AWS ARCHITECTURE</span>
+          <h3 class="font-bold text-slate-100 text-base">Authoritative Multiplayer MOBA Topology</h3>
+        </div>
+        <button id="closeArchModalBtn" class="text-slate-400 hover:text-white text-lg font-bold px-2">✕</button>
+      </div>
+      <div class="p-6 overflow-y-auto space-y-5">
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Click any AWS service node below to inspect how real-time multiplayer state synchronization, matchmaking, and telemetry operate in a production MOBA deployment.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="space-y-3">
+            <div class="text-[10px] font-mono-code uppercase tracking-wider text-slate-400 font-bold">1. Client & Edge Routing</div>
+            <button onclick="selectAwsNode('client')" class="w-full text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 transition">
+              <div class="text-cyan-400 font-bold text-xs">Multiplayer Game Client</div>
+              <div class="text-[11px] text-slate-400 mt-1">Entity interpolation for remote players, local prediction & Fog of War.</div>
+            </button>
+            <button onclick="selectAwsNode('ga')" class="w-full text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-500/40 transition">
+              <div class="text-amber-400 font-bold text-xs">AWS Global Accelerator</div>
+              <div class="text-[11px] text-slate-400 mt-1">Static Anycast IPs routing UDP packets over AWS private fiber.</div>
+            </button>
+            <button onclick="selectAwsNode('cognito')" class="w-full text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-rose-500/40 transition">
+              <div class="text-rose-400 font-bold text-xs">Amazon Cognito + API Gateway</div>
+              <div class="text-[11px] text-slate-400 mt-1">JWT player auth, custom lobby codes & shop transactions.</div>
+            </button>
+          </div>
+          <div class="space-y-3">
+            <div class="text-[10px] font-mono-code uppercase tracking-wider text-slate-400 font-bold">2. Matchmaking & Real-Time Loop</div>
+            <button onclick="selectAwsNode('flexmatch')" class="w-full text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-sky-500/40 transition">
+              <div class="text-sky-400 font-bold text-xs">Amazon GameLift FlexMatch</div>
+              <div class="text-[11px] text-slate-400 mt-1">Party & 5v5 role-based ruleset with latency-aware placement.</div>
+            </button>
+            <button onclick="selectAwsNode('gamelift')" class="w-full text-left p-3.5 rounded-xl bg-amber-950/30 hover:bg-amber-900/30 border-2 border-[#ff9900] aws-pulse transition">
+              <div class="text-[#ff9900] font-bold text-xs flex items-center justify-between">
+                <span>Amazon GameLift Fleet</span>
+                <span class="text-[9px] bg-[#ff9900] text-slate-950 px-1.5 rounded">CORE</span>
+              </div>
+              <div class="text-[11px] text-slate-300 mt-1">Authoritative 60Hz c7g.large servers syncing all champions, minions & turrets.</div>
+            </button>
+          </div>
+          <div class="space-y-3">
+            <div class="text-[10px] font-mono-code uppercase tracking-wider text-slate-400 font-bold">3. Async Telemetry & State</div>
+            <button onclick="selectAwsNode('eventbridge')" class="w-full text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-purple-500/40 transition">
+              <div class="text-purple-400 font-bold text-xs">EventBridge + Amazon SQS</div>
+              <div class="text-[11px] text-slate-400 mt-1">Decoupled match events (Kills, Turrets, Nexus) for Lambda workers.</div>
+            </button>
+            <button onclick="selectAwsNode('dynamodb')" class="w-full text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-blue-500/40 transition">
+              <div class="text-blue-400 font-bold text-xs">Amazon DynamoDB</div>
+              <div class="text-[11px] text-slate-400 mt-1">Single-digit ms persistence for Player MMR, Match History & Mastery.</div>
+            </button>
+            <button onclick="selectAwsNode('redis')" class="w-full text-left p-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-emerald-500/40 transition">
+              <div class="text-emerald-400 font-bold text-xs">ElastiCache for Redis</div>
+              <div class="text-[11px] text-slate-400 mt-1">Real-time party lobbies, friend presence & Challenger leaderboards.</div>
+            </button>
+          </div>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <h4 id="inspectorTitle" class="font-bold text-sm text-[#ff9900]">Amazon GameLift Dedicated Fleet (c7g.large)</h4>
+            <span id="inspectorMetric" class="font-mono-code text-xs text-emerald-400">Live Tick: 60Hz | Latency: 22ms</span>
+          </div>
+          <p id="inspectorDesc" class="text-xs text-slate-300 mt-2 leading-relaxed">
+            Runs the authoritative simulation loop. Clients transmit movement vectors and spell casts while the host/server validates hitboxes, turret aggro, and broadcasts state snapshots.
+          </p>
+          <pre id="inspectorPayload" class="mt-3 p-3 rounded-lg bg-[#070b14] border border-slate-800/90 font-mono-code text-[11px] text-cyan-300 overflow-x-auto"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FIREBASE REAL-TIME MULTIPLAYER & GAME ENGINE SCRIPT -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // =========================================================================
+    // 1. WEB AUDIO SYNTHESIZER (Zero External Asset Dependencies)
+    // =========================================================================
+    const AudioEngine = (() => {
+      let ctx = null;
+      function ensureCtx() {
+        if (!ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) ctx = new AudioCtx();
+        }
+        if (ctx && ctx.state === 'suspended') ctx.resume();
+      }
+      function playTone(freq, type = 'sine', duration = 0.14, gainVal = 0.08, endFreq = null) {
+        try {
+          ensureCtx();
+          if (!ctx) return;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, ctx.currentTime);
+          if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + duration);
+          gain.gain.setValueAtTime(gainVal, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + duration);
+        } catch (_) {}
+      }
+      return {
+        spellQ: () => playTone(680, 'triangle', 0.16, 0.09, 260),
+        spellW: () => playTone(220, 'sawtooth', 0.28, 0.08, 90),
+        spellE: () => playTone(440, 'sine', 0.2, 0.08, 880),
+        spellR: () => {
+          playTone(160, 'sawtooth', 0.45, 0.12, 620);
+          playTone(540, 'square', 0.45, 0.06, 110);
+        },
+        flash: () => playTone(920, 'sine', 0.12, 0.08, 320),
+        heal: () => playTone(520, 'triangle', 0.25, 0.08, 780),
+        hit: () => playTone(180, 'square', 0.07, 0.04, 80),
+        gold: () => playTone(1040, 'sine', 0.12, 0.06, 1320)
+      };
+    })();
+
+    // =========================================================================
+    // 2. FIREBASE MULTIPLAYER STATE & ROOM SYNCHRONIZATION
+    // =========================================================================
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'aether-rift-moba';
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+
+    const netState = {
+      connected: false,
+      roomCode: null,
+      isHost: true,
+      myUid: 'local_' + Math.random().toString(36).substring(2, 8),
+      myName: 'Summoner',
+      myTeam: 'BLUE',
+      myChamp: 'LUX',
+      myLane: 'MID',
+      myReady: true,
+      fillBots: true,
+      roomData: null,
+      unsubRoom: null,
+      unsubPlayers: null,
+      unsubChat: null,
+      lastSyncSent: 0,
+      lastHostWorldSync: 0,
+      remotePlayers: {}, // uid -> player doc
+      processedEventIds: new Set(),
+      processedChatIds: new Set()
+    };
+
+    async function initFirebase() {
+      try {
+        if (typeof __firebase_config === 'undefined') {
+          logAwsEvent('GameLift', 'OfflineSandboxMode', { reason: 'No cloud config injected; local solo/bot simulation active' });
+          return;
+        }
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          const cred = await signInWithCustomToken(auth, __initial_auth_token);
+          currentUser = cred.user;
+        } else {
+          const cred = await signInAnonymously(auth);
+          currentUser = cred.user;
+        }
+        netState.myUid = currentUser.uid;
+        netState.connected = true;
+        logAwsEvent('GameLift', 'MultiplayerAuthReady', { uid: netState.myUid.slice(0, 10) + '...' });
+
+        // Check URL query parameter ?room=XXXXXX for instant friend invite join
+        const params = new URLSearchParams(window.location.search);
+        const inviteCode = params.get('room');
+        if (inviteCode && inviteCode.length === 6) {
+          document.getElementById('joinRoomCodeInput').value = inviteCode.toUpperCase();
+        }
+      } catch (err) {
+        console.warn('Firebase init fallback to local mode:', err);
+      }
+    }
+
+    function generateRoomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+      return code;
+    }
+
+    function getRoomDocRef(code) {
+      return doc(db, 'artifacts', appId, 'public', 'data', 'moba_rooms', code);
+    }
+
+    function getPlayersColRef(code) {
+      return collection(db, 'artifacts', appId, 'public', 'data', `moba_players_${code}`);
+    }
+
+    function getPlayerDocRef(code, uid) {
+      return doc(db, 'artifacts', appId, 'public', 'data', `moba_players_${code}`, uid);
+    }
+
+    function getChatColRef(code) {
+      return collection(db, 'artifacts', appId, 'public', 'data', `moba_chat_${code}`);
+    }
+
+    async function createMultiplayerRoom() {
+      if (!db || !currentUser) {
+        showLobbyError('Cloud networking unavailable in this preview; you can play solo with bots!');
+        return;
+      }
+      const code = generateRoomCode();
+      netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Summoner').slice(0, 16);
+      netState.myChamp = document.getElementById('champSelectInput').value;
+      netState.myLane = document.getElementById('laneSelectInput').value;
+      netState.myTeam = 'BLUE';
+      netState.myReady = true;
+      netState.isHost = true;
+      netState.roomCode = code;
+
+      try {
+        await setDoc(getRoomDocRef(code), {
+          roomCode: code,
+          hostUid: netState.myUid,
+          status: 'LOBBY',
+          fillBots: document.getElementById('fillBotsCheckbox').checked,
+          createdAt: Date.now(),
+          blueKills: 0,
+          redKills: 0,
+          matchTime: 0,
+          structures: {},
+          recentEvents: []
+        });
+
+        await setDoc(getPlayerDocRef(code, netState.myUid), {
+          uid: netState.myUid,
+          name: netState.myName,
+          team: netState.myTeam,
+          champ: netState.myChamp,
+          lane: netState.myLane,
+          ready: true,
+          x: 360,
+          y: 2240,
+          hp: 650,
+          maxHp: 650,
+          shield: 0,
+          mana: 400,
+          maxMana: 400,
+          level: 1,
+          kills: 0,
+          deaths: 0,
+          assists: 0,
+          alive: true,
+          inBush: false,
+          lastCast: null,
+          updatedAt: Date.now()
+        });
+
+        subscribeToRoom(code);
+        updateLobbyConnectionUI(code, true);
+        logAwsEvent('FlexMatch', 'CustomRoomCreated', { roomCode: code, host: netState.myName });
+      } catch (err) {
+        showLobbyError('Failed to create room: ' + err.message);
+      }
+    }
+
+    async function joinMultiplayerRoom(rawCode) {
+      if (!db || !currentUser) {
+        showLobbyError('Cloud networking unavailable in this preview.');
+        return;
+      }
+      const code = rawCode.trim().toUpperCase();
+      if (code.length !== 6) {
+        showLobbyError('Please enter a valid 6-character Room Code.');
+        return;
+      }
+
+      try {
+        const snap = await getDoc(getRoomDocRef(code));
+        if (!snap.exists()) {
+          showLobbyError(`Room "${code}" not found. Double-check the code with your friend.`);
+          return;
+        }
+        const roomData = snap.data();
+        netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Player').slice(0, 16);
+        netState.myChamp = document.getElementById('champSelectInput').value;
+        netState.myLane = document.getElementById('laneSelectInput').value;
+        netState.isHost = roomData.hostUid === netState.myUid;
+        netState.roomCode = code;
+
+        // Auto-assign to team with fewer players so friends can either co-op or 1v1
+        const existingPlayers = Object.values(netState.remotePlayers);
+        const blueCount = existingPlayers.filter(p => p.team === 'BLUE').length;
+        const redCount = existingPlayers.filter(p => p.team === 'RED').length;
+        netState.myTeam = redCount < blueCount ? 'RED' : 'BLUE';
+        netState.myReady = true;
+
+        const spawn = netState.myTeam === 'BLUE' ? { x: 360, y: 2240 } : { x: 2240, y: 360 };
+        await setDoc(getPlayerDocRef(code, netState.myUid), {
+          uid: netState.myUid,
+          name: netState.myName,
+          team: netState.myTeam,
+          champ: netState.myChamp,
+          lane: netState.myLane,
+          ready: true,
+          x: spawn.x,
+          y: spawn.y,
+          hp: 650,
+          maxHp: 650,
+          shield: 0,
+          mana: 400,
+          maxMana: 400,
+          level: 1,
+          kills: 0,
+          deaths: 0,
+          assists: 0,
+          alive: true,
+          inBush: false,
+          lastCast: null,
+          updatedAt: Date.now()
+        });
+
+        subscribeToRoom(code);
+        updateLobbyConnectionUI(code, netState.isHost);
+        logAwsEvent('FlexMatch', 'JoinedMultiplayerRoom', { roomCode: code, team: netState.myTeam });
+
+        // If the match is already in progress, jump straight into the arena!
+        if (roomData.status === 'IN_GAME') {
+          setTimeout(() => launchMatchFromLobby(false), 350);
+        }
+      } catch (err) {
+        showLobbyError('Failed to join room: ' + err.message);
+      }
+    }
+
+    function subscribeToRoom(code) {
+      if (netState.unsubRoom) netState.unsubRoom();
+      if (netState.unsubPlayers) netState.unsubPlayers();
+      if (netState.unsubChat) netState.unsubChat();
+
+      // 1. Listen to Room Metadata & Host-Synced Structures/Events
+      netState.unsubRoom = onSnapshot(getRoomDocRef(code), (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        netState.roomData = data;
+        netState.isHost = data.hostUid === netState.myUid;
+
+        document.getElementById('fillBotsCheckbox').checked = !!data.fillBots;
+        document.getElementById('netRoleBadge').textContent = netState.isHost ? 'HOST AUTH' : 'PEER CLIENT';
+
+        // Start match automatically when host clicks Launch Match
+        if (data.status === 'IN_GAME' && !document.getElementById('multiplayerLobbyModal').classList.contains('hidden')) {
+          launchMatchFromLobby(false);
+        }
+
+        // Non-host peers sync authoritative scores & structure HPs from host
+        if (!netState.isHost && gameState.running) {
+          if (typeof data.blueKills === 'number') gameState.blueKills = data.blueKills;
+          if (typeof data.redKills === 'number') gameState.redKills = data.redKills;
+          if (data.structures) {
+            gameState.structures.forEach(st => {
+              const remoteSt = data.structures[st.id];
+              if (remoteSt) {
+                st.hp = remoteSt.hp;
+                st.alive = remoteSt.alive;
+              }
+            });
+          }
+        }
+
+        // Process broadcasted combat events (damage to local player, announcements)
+        if (Array.isArray(data.recentEvents)) {
+          data.recentEvents.forEach(ev => {
+            if (!ev || !ev.id || netState.processedEventIds.has(ev.id)) return;
+            netState.processedEventIds.add(ev.id);
+            if (ev.type === 'DAMAGE_PLAYER' && ev.targetUid === netState.myUid && gameState.player) {
+              dealDamage({ name: ev.attackerName || 'Enemy', kind: 'CHAMPION' }, gameState.player, ev.amount, '#f43f5e', true);
+            } else if (ev.type === 'ANNOUNCE' && ev.senderUid !== netState.myUid) {
+              showAnnouncement(ev.text, ev.color || 'text-amber-300');
+            }
+          });
+        }
+
+        renderLobbyRoster();
+      }, (err) => console.warn('Room listener error:', err));
+
+      // 2. Listen to All Connected Players in Real Time
+      netState.unsubPlayers = onSnapshot(getPlayersColRef(code), (snapshot) => {
+        const updatedMap = {};
+        snapshot.forEach(docSnap => {
+          const pData = docSnap.data();
+          updatedMap[pData.uid] = pData;
+
+          // Trigger remote spell visual effects when another player casts an ability
+          if (pData.uid !== netState.myUid && pData.lastCast && pData.lastCast.id) {
+            if (!netState.processedEventIds.has(pData.lastCast.id)) {
+              netState.processedEventIds.add(pData.lastCast.id);
+              renderRemoteAbilityCast(pData, pData.lastCast);
+            }
+          }
+        });
+        netState.remotePlayers = updatedMap;
+        syncRemoteChampionsIntoGame();
+        renderLobbyRoster();
+        updateSidebarRoster();
+      }, (err) => console.warn('Players listener error:', err));
+
+      // 3. Listen to Live Match Chat
+      netState.unsubChat = onSnapshot(getChatColRef(code), (snapshot) => {
+        const msgs = [];
+        snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+        msgs.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        msgs.slice(-25).forEach(m => {
+          if (netState.processedChatIds.has(m.id)) return;
+          netState.processedChatIds.add(m.id);
+          appendChatMessage(m.sender, m.team, m.text);
+        });
+      }, (err) => console.warn('Chat listener error:', err));
+    }
+
+    function updateLobbyConnectionUI(code, isHost) {
+      document.getElementById('lobbyErrorMsg').classList.add('hidden');
+      document.getElementById('roomConnectControls').classList.add('hidden');
+      document.getElementById('activeRoomBanner').classList.remove('hidden');
+      document.getElementById('lobbyRoomCodeDisplay').textContent = code;
+      document.getElementById('lobbyRoleTag').textContent = isHost ? 'ROOM HOST' : 'PLAYER';
+      document.getElementById('headerRoomCodeText').textContent = code;
+      document.getElementById('hudRoomCode').textContent = code;
+    }
+
+    function showLobbyError(msg) {
+      const el = document.getElementById('lobbyErrorMsg');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function renderLobbyRoster() {
+      const blueList = document.getElementById('lobbyBlueList');
+      const redList = document.getElementById('lobbyRedList');
+      if (!blueList || !redList) return;
+
+      const players = Object.values(netState.remotePlayers);
+      if (players.length === 0) {
+        // Local preview before room creation
+        players.push({
+          uid: netState.myUid,
+          name: document.getElementById('summonerNameInput').value || 'Summoner',
+          team: netState.myTeam,
+          champ: document.getElementById('champSelectInput').value,
+          lane: document.getElementById('laneSelectInput').value,
+          ready: netState.myReady,
+          isHuman: true
+        });
+      }
+
+      const blueHumans = players.filter(p => p.team === 'BLUE');
+      const redHumans = players.filter(p => p.team === 'RED');
+
+      document.getElementById('lobbyPlayerCount').textContent = players.length;
+      document.getElementById('blueTeamCount').textContent = `${blueHumans.length} / 5`;
+      document.getElementById('redTeamCount').textContent = `${redHumans.length} / 5`;
+
+      const renderSlot = (p, isBot = false) => `
+        <div class="flex items-center justify-between px-2.5 py-1.5 rounded bg-slate-950/80 border ${p.uid === netState.myUid ? 'border-amber-400/60' : 'border-slate-800'}">
+          <div class="flex items-center gap-2">
+            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${isBot ? 'bg-slate-800 text-slate-400' : 'bg-emerald-500/20 text-emerald-300'}">
+              ${isBot ? 'BOT' : 'HUMAN'}
+            </span>
+            <span class="font-semibold text-slate-200">${p.name}</span>
+            <span class="text-[10px] text-slate-400">(${p.champ} • ${p.lane})</span>
+          </div>
+          <span class="text-[10px] font-mono-code ${p.ready ? 'text-emerald-400' : 'text-amber-400'}">
+            ${p.ready ? 'READY' : 'WAITING'}
+          </span>
+        </div>
+      `;
+
+      blueList.innerHTML = blueHumans.map(p => renderSlot(p, false)).join('') || '<div class="text-slate-500 italic text-[11px]">No human players on Blue</div>';
+      redList.innerHTML = redHumans.map(p => renderSlot(p, false)).join('') || '<div class="text-slate-500 italic text-[11px]">No human players on Red (Bots will fill)</div>';
+    }
+
+    // Push local player state to Firestore at ~12Hz for smooth over-the-network play
+    async function pushLocalPlayerState(castEvent = null) {
+      if (!db || !netState.roomCode || !gameState.player) return;
+      const now = Date.now();
+      if (!castEvent && now - netState.lastSyncSent < 85) return;
+      netState.lastSyncSent = now;
+
+      const p = gameState.player;
+      const payload = {
+        uid: netState.myUid,
+        name: netState.myName,
+        team: netState.myTeam,
+        champ: netState.myChamp,
+        lane: netState.myLane,
+        x: Math.round(p.x),
+        y: Math.round(p.y),
+        hp: Math.round(p.hp),
+        maxHp: Math.round(p.maxHp),
+        shield: Math.round(p.shield),
+        mana: Math.round(p.mana),
+        maxMana: Math.round(p.maxMana),
+        level: p.level,
+        kills: p.kills,
+        deaths: p.deaths,
+        assists: p.assists,
+        alive: p.alive,
+        inBush: p.inBush,
+        updatedAt: now
+      };
+      if (castEvent) payload.lastCast = castEvent;
+
+      try {
+        await setDoc(getPlayerDocRef(netState.roomCode, netState.myUid), payload, { merge: true });
+      } catch (_) {}
+    }
+
+    // Host broadcasts authoritative turret/nexus HPs and kills every ~450ms
+    async function pushHostWorldState(extraEvent = null) {
+      if (!db || !netState.roomCode || !netState.isHost) return;
+      const now = Date.now();
+      if (!extraEvent && now - netState.lastHostWorldSync < 450) return;
+      netState.lastHostWorldSync = now;
+
+      const structMap = {};
+      gameState.structures.forEach(s => {
+        structMap[s.id] = { hp: Math.round(s.hp), alive: s.alive };
+      });
+
+      const updatePayload = {
+        blueKills: gameState.blueKills,
+        redKills: gameState.redKills,
+        matchTime: Math.round(gameState.matchTime),
+        structures: structMap
+      };
+
+      if (extraEvent) {
+        const prev = (netState.roomData && Array.isArray(netState.roomData.recentEvents))
+          ? netState.roomData.recentEvents.slice(-8)
+          : [];
+        updatePayload.recentEvents = [...prev, extraEvent];
+      }
+
+      try {
+        await updateDoc(getRoomDocRef(netState.roomCode), updatePayload);
+      } catch (_) {}
+    }
+
+    // Send a damage or announcement event over the room doc
+    async function broadcastNetworkEvent(evObj) {
+      if (!db || !netState.roomCode) return;
+      const ev = { id: `${netState.myUid}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, senderUid: netState.myUid, ...evObj };
+      netState.processedEventIds.add(ev.id);
+      try {
+        const prev = (netState.roomData && Array.isArray(netState.roomData.recentEvents))
+          ? netState.roomData.recentEvents.slice(-8)
+          : [];
+        await updateDoc(getRoomDocRef(netState.roomCode), {
+          recentEvents: [...prev, ev]
+        });
+      } catch (_) {}
+    }
+
+    // =========================================================================
+    // 3. GAME ENGINE CONSTANTS & CHAMPION PRESETS
+    // =========================================================================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const minimapCanvas = document.getElementById('minimapCanvas');
+    const mctx = minimapCanvas.getContext('2d');
+    const canvasContainer = document.getElementById('canvasContainer');
+
+    const WORLD_SIZE = 2600;
+    const TEAM_BLUE = 'BLUE';
+    const TEAM_RED = 'RED';
+
+    const CHAMP_PRESETS = {
+      LUX: { label: 'LUX', ad: 58, ap: 55, hp: 640, spd: 345, range: 265, color: '#38bdf8' },
+      EZREAL: { label: 'EZ', ad: 72, ap: 35, hp: 620, spd: 360, range: 285, color: '#fbbf24' },
+      AHRI: { label: 'AHRI', ad: 60, ap: 52, hp: 630, spd: 365, range: 255, color: '#f472b6' },
+      GAREN: { label: 'GAR', ad: 82, ap: 10, hp: 780, spd: 350, range: 115, color: '#34d399' }
+    };
+
+    const LANE_PATHS = {
+      TOP: [
+        { x: 260, y: 2340 },
+        { x: 260, y: 1300 },
+        { x: 260, y: 320 },
+        { x: 1300, y: 260 },
+        { x: 2340, y: 260 }
+      ],
+      MID: [
+        { x: 300, y: 2300 },
+        { x: 850, y: 1750 },
+        { x: 1300, y: 1300 },
+        { x: 1750, y: 850 },
+        { x: 2300, y: 300 }
+      ],
+      BOT: [
+        { x: 300, y: 2340 },
+        { x: 1300, y: 2340 },
+        { x: 2340, y: 2340 },
+        { x: 2340, y: 1300 },
+        { x: 2340, y: 260 }
+      ]
+    };
+
+    const BUSHES = [
+      { x: 210, y: 1450, w: 110, h: 160 },
+      { x: 210, y: 980, w: 110, h: 160 },
+      { x: 1020, y: 1420, w: 140, h: 110 },
+      { x: 1440, y: 1070, w: 140, h: 110 },
+      { x: 1050, y: 2290, w: 160, h: 110 },
+      { x: 1450, y: 2290, w: 160, h: 110 },
+      { x: 960, y: 210, w: 160, h: 110 },
+      { x: 1460, y: 210, w: 160, h: 110 }
+    ];
+
+    const SHOP_ITEMS = [
+      { id: 'dorans', name: "Doran's Ring", cost: 400, stats: '+25 AP, +80 HP', ap: 25, ad: 0, hp: 80, spd: 0 },
+      { id: 'boots', name: 'Sorcerer Shoes', cost: 350, stats: '+45 Move Speed', ap: 0, ad: 0, hp: 0, spd: 45 },
+      { id: 'wand', name: 'Blasting Wand', cost: 650, stats: '+55 Ability Power', ap: 55, ad: 0, hp: 0, spd: 0 },
+      { id: 'bf', name: 'B.F. Sword', cost: 700, stats: '+40 Attack Damage', ap: 0, ad: 40, hp: 0, spd: 0 },
+      { id: 'rabadon', name: "Rabadon's Deathcap", cost: 1200, stats: '+120 AP, +150 HP', ap: 120, ad: 0, hp: 150, spd: 0 }
+    ];
+
+    let gameState = {
+      running: true,
+      matchTime: 0,
+      waveTimer: 2.0,
+      waveCount: 0,
+      blueKills: 0,
+      redKills: 0,
+      cameraLocked: true,
+      camera: { x: 360, y: 2240 },
+      mouseWorld: { x: 1300, y: 1300 },
+      mouseScreen: { x: 0, y: 0 },
+      keys: {},
+      tickRate: 60,
+      matchId: 'gl-sess-' + Math.floor(1000 + Math.random() * 9000),
+      entities: [],
+      structures: [],
+      projectiles: [],
+      effects: [],
+      floatingTexts: [],
+      clickMarkers: [],
+      player: null
+    };
+
+    function logAwsEvent(service, eventType, payload) {
+      const logContainer = document.getElementById('awsEventLog');
+      if (!logContainer) return;
+      const badgeColors = {
+        GameLift: 'text-[#ff9900] border-[#ff9900]/40 bg-[#ff9900]/10',
+        EventBridge: 'text-purple-400 border-purple-500/40 bg-purple-500/10',
+        DynamoDB: 'text-blue-400 border-blue-500/40 bg-blue-500/10',
+        FlexMatch: 'text-sky-400 border-sky-500/40 bg-sky-500/10'
+      };
+      const cls = badgeColors[service] || 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10';
+      const card = document.createElement('div');
+      card.className = 'p-2 rounded bg-slate-900/90 border border-slate-800 space-y-1';
+      card.innerHTML = `
+        <div class="flex items-center justify-between">
+          <span class="px-1.5 py-0.2 rounded border text-[9px] font-bold ${cls}">${service}</span>
+          <span class="text-slate-500 text-[9px]">${new Date().toISOString().substr(11, 8)}</span>
+        </div>
+        <div class="text-slate-200 font-semibold">${eventType}</div>
+        <div class="text-slate-400 break-all leading-tight">${JSON.stringify(payload)}</div>
+      `;
+      logContainer.prepend(card);
+      while (logContainer.children.length > 30) logContainer.removeChild(logContainer.lastChild);
+    }
+
+    function showAnnouncement(text, colorClass = 'text-amber-300') {
+      const el = document.getElementById('announcerBanner');
+      el.textContent = text;
+      el.className = `pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-full bg-slate-950/90 border border-amber-400/50 font-display font-bold text-xs sm:text-sm tracking-wider shadow-lg transition-opacity duration-300 z-20 ${colorClass}`;
+      el.style.opacity = '1';
+      clearTimeout(el._hideTimeout);
+      el._hideTimeout = setTimeout(() => { el.style.opacity = '0'; }, 2600);
+    }
+
+    function appendChatMessage(sender, team, text) {
+      const box = document.getElementById('chatMessagesBox');
+      if (!box) return;
+      const line = document.createElement('div');
+      const teamColor = team === 'BLUE' ? 'text-sky-400' : team === 'RED' ? 'text-rose-400' : 'text-amber-300';
+      line.innerHTML = `<span class="font-bold ${teamColor}">[${sender}]:</span> <span class="text-slate-200"></span>`;
+      line.querySelector('span:last-child').textContent = text;
+      box.appendChild(line);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    // =========================================================================
+    // 4. STRUCTURES, CHAMPIONS & REMOTE PLAYER SYNCHRONIZATION
+    // =========================================================================
+    function createStructures() {
+      const list = [];
+      const addStruct = (team, type, lane, x, y, hp, range, dmg) => {
+        list.push({
+          id: `${team}_${type}_${lane}_${x}`,
+          team, type, lane, x, y,
+          radius: type === 'NEXUS' ? 46 : 28,
+          hp, maxHp: hp, range, dmg,
+          attackCooldown: 0,
+          attackInterval: type === 'NEXUS' ? 0.9 : 1.15,
+          targetId: null,
+          alive: true
+        });
+      };
+
+      addStruct(TEAM_BLUE, 'NEXUS', 'BASE', 250, 2350, 3200, 340, 145);
+      addStruct(TEAM_BLUE, 'TURRET', 'TOP', 260, 1750, 1400, 310, 110);
+      addStruct(TEAM_BLUE, 'TURRET', 'TOP', 260, 1050, 1400, 310, 110);
+      addStruct(TEAM_BLUE, 'TURRET', 'MID', 660, 1940, 1400, 310, 110);
+      addStruct(TEAM_BLUE, 'TURRET', 'MID', 1020, 1580, 1400, 310, 110);
+      addStruct(TEAM_BLUE, 'TURRET', 'BOT', 880, 2340, 1400, 310, 110);
+      addStruct(TEAM_BLUE, 'TURRET', 'BOT', 1620, 2340, 1400, 310, 110);
+
+      addStruct(TEAM_RED, 'NEXUS', 'BASE', 2350, 250, 3200, 340, 145);
+      addStruct(TEAM_RED, 'TURRET', 'TOP', 980, 260, 1400, 310, 110);
+      addStruct(TEAM_RED, 'TURRET', 'TOP', 1720, 260, 1400, 310, 110);
+      addStruct(TEAM_RED, 'TURRET', 'MID', 1580, 1020, 1400, 310, 110);
+      addStruct(TEAM_RED, 'TURRET', 'MID', 1940, 660, 1400, 310, 110);
+      addStruct(TEAM_RED, 'TURRET', 'BOT', 2340, 1550, 1400, 310, 110);
+      addStruct(TEAM_RED, 'TURRET', 'BOT', 2340, 880, 1400, 310, 110);
+      return list;
+    }
+
+    function createChampion({ id, name, team, lane, champKey = 'LUX', isPlayer = false, isRemoteHuman = false, x, y }) {
+      const preset = CHAMP_PRESETS[champKey] || CHAMP_PRESETS.LUX;
+      return {
+        id,
+        name,
+        team,
+        lane,
+        champKey,
+        isPlayer,
+        isRemoteHuman,
+        kind: 'CHAMPION',
+        x, y,
+        targetX: x,
+        targetY: y,
+        spawnX: team === TEAM_BLUE ? 340 : 2260,
+        spawnY: team === TEAM_BLUE ? 2260 : 340,
+        radius: 22,
+        color: team === TEAM_BLUE ? preset.color : '#f43f5e',
+        level: 1,
+        xp: 0,
+        xpToNext: 120,
+        hp: preset.hp,
+        maxHp: preset.hp,
+        shield: 0,
+        mana: 400,
+        maxMana: 400,
+        ad: preset.ad,
+        ap: preset.ap,
+        armor: 28,
+        speed: preset.spd,
+        attackRange: preset.range,
+        attackCooldown: 0,
+        attackInterval: 0.95,
+        gold: 500,
+        kills: 0,
+        deaths: 0,
+        assists: 0,
+        cs: 0,
+        alive: true,
+        respawnTimer: 0,
+        moveTarget: null,
+        attackTarget: null,
+        inBush: false,
+        items: [],
+        cooldowns: { Q: 0, W: 0, E: 0, R: 0, D: 0, F: 0 },
+        maxCooldowns: { Q: 3.5, W: 6.0, E: 7.0, R: 18.0, D: 25.0, F: 30.0 }
+      };
+    }
+
+    function syncRemoteChampionsIntoGame() {
+      if (!gameState.entities) return;
+      const remotes = Object.values(netState.remotePlayers);
+
+      remotes.forEach(rp => {
+        if (rp.uid === netState.myUid) return;
+        let ent = gameState.entities.find(e => e.id === `remote_${rp.uid}`);
+        if (!ent) {
+          ent = createChampion({
+            id: `remote_${rp.uid}`,
+            name: rp.name || 'Friend',
+            team: rp.team || TEAM_RED,
+            lane: rp.lane || 'MID',
+            champKey: rp.champ || 'LUX',
+            isRemoteHuman: true,
+            x: rp.x || 1300,
+            y: rp.y || 1300
+          });
+          gameState.entities.push(ent);
+          showAnnouncement(`${ent.name} JOINED THE RIFT (${ent.team})!`, 'text-sky-300');
+        }
+        ent.name = rp.name || ent.name;
+        ent.team = rp.team || ent.team;
+        ent.targetX = typeof rp.x === 'number' ? rp.x : ent.targetX;
+        ent.targetY = typeof rp.y === 'number' ? rp.y : ent.targetY;
+        ent.hp = typeof rp.hp === 'number' ? rp.hp : ent.hp;
+        ent.maxHp = typeof rp.maxHp === 'number' ? rp.maxHp : ent.maxHp;
+        ent.shield = rp.shield || 0;
+        ent.level = rp.level || 1;
+        ent.kills = rp.kills || 0;
+        ent.deaths = rp.deaths || 0;
+        ent.alive = rp.alive !== false;
+        ent.inBush = !!rp.inBush;
+      });
+    }
+
+    function renderRemoteAbilityCast(remotePlayer, cast) {
+      const ang = cast.angle || 0;
+      const sx = cast.x || remotePlayer.x;
+      const sy = cast.y || remotePlayer.y;
+      const team = remotePlayer.team || TEAM_RED;
+
+      if (cast.key === 'Q') {
+        gameState.projectiles.push({
+          team,
+          owner: { name: remotePlayer.name, kind: 'CHAMPION' },
+          x: sx + Math.cos(ang) * 24,
+          y: sy + Math.sin(ang) * 24,
+          vx: Math.cos(ang) * 860,
+          vy: Math.sin(ang) * 860,
+          radius: 12,
+          dmg: 95,
+          color: team === TEAM_BLUE ? '#38bdf8' : '#fb7185',
+          life: 0.95,
+          pierce: true,
+          isRemoteVisual: true,
+          hitIds: new Set()
+        });
+      } else if (cast.key === 'W') {
+        gameState.effects.push({
+          type: 'NOVA',
+          x: cast.tx || sx,
+          y: cast.ty || sy,
+          radius: 135,
+          color: '#818cf8',
+          timer: 0.45,
+          maxTimer: 0.45
+        });
+      } else if (cast.key === 'R') {
+        gameState.effects.push({
+          type: 'BEAM',
+          x1: sx,
+          y1: sy,
+          x2: sx + Math.cos(ang) * 780,
+          y2: sy + Math.sin(ang) * 780,
+          width: 58,
+          color: '#fbbf24',
+          timer: 0.55,
+          maxTimer: 0.55
+        });
+      }
+    }
+
+    function updateSidebarRoster() {
+      const blueEl = document.getElementById('blueRolesList');
+      const redEl = document.getElementById('redRolesList');
+      if (!blueEl || !redEl) return;
+
+      const champs = gameState.entities.filter(e => e.kind === 'CHAMPION');
+      const blues = champs.filter(c => c.team === TEAM_BLUE);
+      const reds = champs.filter(c => c.team === TEAM_RED);
+
+      blueEl.innerHTML = blues.map(c =>
+        `<div class="${c.isPlayer ? 'text-amber-300 font-bold' : ''}">${c.lane}: ${c.name}</div>`
+      ).join('');
+      redEl.innerHTML = reds.map(c =>
+        `<div class="${c.isPlayer ? 'text-amber-300 font-bold' : ''}">${c.lane}: ${c.name}</div>`
+      ).join('');
+
+      const humanCount = champs.filter(c => c.isPlayer || c.isRemoteHuman).length;
+      document.getElementById('hudHumansVal').textContent = humanCount;
+    }
+
+    function spawnMinionWave() {
+      gameState.waveCount++;
+      ['TOP', 'MID', 'BOT'].forEach(lane => {
+        const path = LANE_PATHS[lane];
+        for (let i = 0; i < 3; i++) {
+          const isCaster = i === 2;
+          gameState.entities.push({
+            id: `m_b_${lane}_${gameState.waveCount}_${i}`,
+            name: isCaster ? 'Blue Caster' : 'Blue Melee',
+            team: TEAM_BLUE,
+            lane,
+            kind: 'MINION',
+            isCaster,
+            x: path[0].x + (i * 22 - 22),
+            y: path[0].y + (i * 22 - 22),
+            radius: isCaster ? 12 : 14,
+            hp: isCaster ? 180 : 270,
+            maxHp: isCaster ? 180 : 270,
+            ad: isCaster ? 26 : 18,
+            speed: 175,
+            attackRange: isCaster ? 210 : 52,
+            attackCooldown: 0,
+            attackInterval: 1.2,
+            waypointIdx: 1,
+            alive: true,
+            inBush: false
+          });
+
+          const lastIdx = path.length - 1;
+          gameState.entities.push({
+            id: `m_r_${lane}_${gameState.waveCount}_${i}`,
+            name: isCaster ? 'Red Caster' : 'Red Melee',
+            team: TEAM_RED,
+            lane,
+            kind: 'MINION',
+            isCaster,
+            x: path[lastIdx].x - (i * 22 - 22),
+            y: path[lastIdx].y - (i * 22 - 22),
+            radius: isCaster ? 12 : 14,
+            hp: isCaster ? 180 : 270,
+            maxHp: isCaster ? 180 : 270,
+            ad: isCaster ? 26 : 18,
+            speed: 175,
+            attackRange: isCaster ? 210 : 52,
+            attackCooldown: 0,
+            attackInterval: 1.2,
+            waypointIdx: lastIdx - 1,
+            alive: true,
+            inBush: false
+          });
+        }
+      });
+    }
+
+    // =========================================================================
+    // 5. INITIALIZE MATCH (SUPPORTS SOLO, CO-OP, 1v1, OR FULL 5v5 WITH BOTS)
+    // =========================================================================
+    function initMatch() {
+      gameState.running = true;
+      gameState.matchTime = 0;
+      gameState.waveTimer = 1.5;
+      gameState.waveCount = 0;
+      gameState.blueKills = 0;
+      gameState.redKills = 0;
+      gameState.projectiles = [];
+      gameState.effects = [];
+      gameState.floatingTexts = [];
+      gameState.clickMarkers = [];
+      gameState.structures = createStructures();
+      gameState.entities = [];
+
+      const mySpawn = netState.myTeam === TEAM_BLUE ? { x: 360, y: 2240 } : { x: 2240, y: 360 };
+      const player = createChampion({
+        id: 'local_player',
+        name: netState.myName || 'Summoner',
+        team: netState.myTeam,
+        lane: netState.myLane,
+        champKey: netState.myChamp,
+        isPlayer: true,
+        x: mySpawn.x,
+        y: mySpawn.y
+      });
+      gameState.player = player;
+      gameState.camera.x = player.x;
+      gameState.camera.y = player.y;
+      gameState.entities.push(player);
+
+      // Update Champion Avatar Badge
+      const preset = CHAMP_PRESETS[netState.myChamp] || CHAMP_PRESETS.LUX;
+      document.getElementById('champAvatarCircle').textContent = preset.label;
+
+      // Add any connected human friends from Firestore
+      syncRemoteChampionsIntoGame();
+
+      // Fill remaining lanes with AI Bots if enabled
+      const fillBots = document.getElementById('fillBotsCheckbox').checked;
+      if (fillBots) {
+        const blueLanesTaken = new Set(gameState.entities.filter(e => e.team === TEAM_BLUE).map(e => e.lane));
+        const redLanesTaken = new Set(gameState.entities.filter(e => e.team === TEAM_RED).map(e => e.lane));
+
+        const blueBotSpecs = [
+          { lane: 'TOP', name: 'Ironclad_AI', champKey: 'GAREN', x: 260, y: 2150 },
+          { lane: 'MID', name: 'Lumina_AI', champKey: 'LUX', x: 380, y: 2220 },
+          { lane: 'BOT', name: 'EzrealBot', champKey: 'EZREAL', x: 450, y: 2340 }
+        ];
+        blueBotSpecs.forEach(b => {
+          if (!blueLanesTaken.has(b.lane)) {
+            gameState.entities.push(createChampion({
+              id: `ai_blue_${b.lane}`,
+              name: b.name,
+              team: TEAM_BLUE,
+              lane: b.lane,
+              champKey: b.champKey,
+              x: b.x,
+              y: b.y
+            }));
+          }
+        });
+
+        const redBotSpecs = [
+          { lane: 'TOP', name: 'DariusBot', champKey: 'GAREN', x: 2150, y: 260 },
+          { lane: 'MID', name: 'Ahri_AI', champKey: 'AHRI', x: 2220, y: 380 },
+          { lane: 'BOT', name: 'JinxBot', champKey: 'EZREAL', x: 2340, y: 450 }
+        ];
+        redBotSpecs.forEach(b => {
+          if (!redLanesTaken.has(b.lane)) {
+            gameState.entities.push(createChampion({
+              id: `ai_red_${b.lane}`,
+              name: b.name,
+              team: TEAM_RED,
+              lane: b.lane,
+              champKey: b.champKey,
+              x: b.x,
+              y: b.y
+            }));
+          }
+        });
+      }
+
+      document.getElementById('gameOverOverlay').classList.add('hidden');
+      document.getElementById('respawnOverlay').classList.add('hidden');
+
+      renderShop();
+      updateSidebarRoster();
+      showAnnouncement(`MATCH STARTED — TEAM ${netState.myTeam}`);
+      logAwsEvent('GameLift', 'OnStartGameSession', {
+        roomCode: netState.roomCode || 'SOLO-LOCAL',
+        team: netState.myTeam,
+        champion: netState.myChamp
+      });
+    }
+
+    // =========================================================================
+    // 6. SHOP, ABILITIES & COMBAT
+    // =========================================================================
+    function renderShop() {
+      const container = document.getElementById('shopItemsList');
+      container.innerHTML = '';
+      SHOP_ITEMS.forEach(item => {
+        const owned = gameState.player && gameState.player.items.includes(item.id);
+        const canAfford = gameState.player && gameState.player.gold >= item.cost;
+        const btn = document.createElement('button');
+        btn.className = `w-full p-2 rounded-lg border text-left flex items-center justify-between transition ${
+          owned
+            ? 'bg-emerald-950/40 border-emerald-500/40 opacity-70 cursor-default'
+            : canAfford
+            ? 'bg-slate-900 hover:bg-slate-800 border-amber-500/40 cursor-pointer'
+            : 'bg-slate-900/60 border-slate-800 opacity-50 cursor-not-allowed'
+        }`;
+        btn.innerHTML = `
+          <div>
+            <div class="font-semibold text-slate-100">${item.name}</div>
+            <div class="text-[10px] text-cyan-300">${item.stats}</div>
+          </div>
+          <div class="font-mono-code font-bold ${owned ? 'text-emerald-400' : 'text-amber-400'}">
+            ${owned ? 'OWNED' : item.cost + 'g'}
+          </div>
+        `;
+        btn.onclick = () => buyItem(item);
+        container.appendChild(btn);
+      });
+    }
+
+    function buyItem(item) {
+      const p = gameState.player;
+      if (!p || p.items.includes(item.id) || p.gold < item.cost) return;
+      p.gold -= item.cost;
+      p.items.push(item.id);
+      p.ap += item.ap;
+      p.ad += item.ad;
+      p.maxHp += item.hp;
+      p.hp += item.hp;
+      p.speed += item.spd;
+
+      AudioEngine.gold();
+      spawnFloatingText(p.x, p.y - 30, `Purchased ${item.name}!`, '#fbbf24');
+      logAwsEvent('DynamoDB', 'UpdateItem:Inventory', { item: item.id, gold: Math.floor(p.gold) });
+      renderShop();
+    }
+
+    window.triggerAbility = function(key) {
+      const p = gameState.player;
+      if (!p || !p.alive || !gameState.running) return;
+      if (p.cooldowns[key] > 0) return;
+
+      const angle = Math.atan2(gameState.mouseWorld.y - p.y, gameState.mouseWorld.x - p.x);
+      let castPayload = null;
+
+      if (key === 'Q') {
+        if (p.mana < 50) return spawnFloatingText(p.x, p.y - 25, 'Out of Mana!', '#38bdf8');
+        p.mana -= 50;
+        p.cooldowns.Q = p.maxCooldowns.Q;
+        AudioEngine.spellQ();
+        gameState.projectiles.push({
+          team: p.team,
+          owner: p,
+          x: p.x + Math.cos(angle) * 24,
+          y: p.y + Math.sin(angle) * 24,
+          vx: Math.cos(angle) * 860,
+          vy: Math.sin(angle) * 860,
+          radius: 12,
+          dmg: 95 + p.ap * 0.75,
+          color: '#38bdf8',
+          life: 0.95,
+          pierce: true,
+          hitIds: new Set()
+        });
+        castPayload = { id: `${netState.myUid}_Q_${Date.now()}`, key: 'Q', x: p.x, y: p.y, angle };
+      } else if (key === 'W') {
+        if (p.mana < 65) return spawnFloatingText(p.x, p.y - 25, 'Out of Mana!', '#38bdf8');
+        p.mana -= 65;
+        p.cooldowns.W = p.maxCooldowns.W;
+        AudioEngine.spellW();
+        const dist = Math.min(550, Math.hypot(gameState.mouseWorld.x - p.x, gameState.mouseWorld.y - p.y));
+        const tx = p.x + Math.cos(angle) * dist;
+        const ty = p.y + Math.sin(angle) * dist;
+
+        gameState.effects.push({
+          type: 'NOVA', x: tx, y: ty, radius: 135, color: '#818cf8', timer: 0.45, maxTimer: 0.45
+        });
+        applyAreaDamage(p, tx, ty, 135, 110 + p.ap * 0.85);
+        castPayload = { id: `${netState.myUid}_W_${Date.now()}`, key: 'W', x: p.x, y: p.y, tx, ty, angle };
+      } else if (key === 'E') {
+        if (p.mana < 55) return spawnFloatingText(p.x, p.y - 25, 'Out of Mana!', '#38bdf8');
+        p.mana -= 55;
+        p.cooldowns.E = p.maxCooldowns.E;
+        AudioEngine.spellE();
+        const dashDist = 190;
+        p.x = clamp(p.x + Math.cos(angle) * dashDist, 80, WORLD_SIZE - 80);
+        p.y = clamp(p.y + Math.sin(angle) * dashDist, 80, WORLD_SIZE - 80);
+        p.moveTarget = null;
+        p.shield = Math.min(p.maxHp * 0.45, p.shield + 130 + p.ap * 0.5);
+        spawnFloatingText(p.x, p.y - 28, `+${Math.round(130 + p.ap * 0.5)} Shield`, '#34d399');
+        gameState.effects.push({ type: 'NOVA', x: p.x, y: p.y, radius: 65, color: '#34d399', timer: 0.35, maxTimer: 0.35 });
+        castPayload = { id: `${netState.myUid}_E_${Date.now()}`, key: 'E', x: p.x, y: p.y, angle };
+      } else if (key === 'R') {
+        if (p.mana < 100) return spawnFloatingText(p.x, p.y - 25, 'Out of Mana!', '#38bdf8');
+        p.mana -= 100;
+        p.cooldowns.R = p.maxCooldowns.R;
+        AudioEngine.spellR();
+
+        const beamLength = 780;
+        const beamWidth = 58;
+        const endX = p.x + Math.cos(angle) * beamLength;
+        const endY = p.y + Math.sin(angle) * beamLength;
+
+        gameState.effects.push({
+          type: 'BEAM', x1: p.x, y1: p.y, x2: endX, y2: endY, width: beamWidth, color: '#fbbf24', timer: 0.55, maxTimer: 0.55
+        });
+
+        const ultDmg = 240 + p.ap * 1.25;
+        [...gameState.entities, ...gameState.structures].forEach(t => {
+          if (!t.alive || t.team === p.team) return;
+          if (pointToSegmentDist(t.x, t.y, p.x, p.y, endX, endY) <= beamWidth * 0.65 + t.radius) {
+            dealDamage(p, t, ultDmg, '#fbbf24');
+          }
+        });
+        castPayload = { id: `${netState.myUid}_R_${Date.now()}`, key: 'R', x: p.x, y: p.y, angle };
+      } else if (key === 'D') {
+        p.cooldowns.D = p.maxCooldowns.D;
+        AudioEngine.flash();
+        gameState.effects.push({ type: 'NOVA', x: p.x, y: p.y, radius: 45, color: '#fde047', timer: 0.3, maxTimer: 0.3 });
+        p.x = clamp(p.x + Math.cos(angle) * 250, 80, WORLD_SIZE - 80);
+        p.y = clamp(p.y + Math.sin(angle) * 250, 80, WORLD_SIZE - 80);
+        p.moveTarget = null;
+        gameState.effects.push({ type: 'NOVA', x: p.x, y: p.y, radius: 55, color: '#fde047', timer: 0.3, maxTimer: 0.3 });
+      } else if (key === 'F') {
+        p.cooldowns.F = p.maxCooldowns.F;
+        AudioEngine.heal();
+        const healAmt = Math.round(p.maxHp * 0.32);
+        p.hp = Math.min(p.maxHp, p.hp + healAmt);
+        spawnFloatingText(p.x, p.y - 30, `+${healAmt} HP`, '#4ade80');
+        gameState.effects.push({ type: 'NOVA', x: p.x, y: p.y, radius: 75, color: '#4ade80', timer: 0.4, maxTimer: 0.4 });
+      }
+
+      if (castPayload) pushLocalPlayerState(castPayload);
+    };
+
+    function applyAreaDamage(attacker, x, y, radius, amount) {
+      [...gameState.entities, ...gameState.structures].forEach(t => {
+        if (!t.alive || t.team === attacker.team) return;
+        if (Math.hypot(t.x - x, t.y - y) <= radius + t.radius) {
+          dealDamage(attacker, t, amount, '#a5b4fc');
+        }
+      });
+    }
+
+    function dealDamage(attacker, target, rawDamage, textColor = '#f87171', fromNetwork = false) {
+      if (!target.alive) return;
+
+      // If hitting a remote human player, transmit the damage packet over Firestore
+      if (target.isRemoteHuman && !fromNetwork) {
+        const targetUid = target.id.replace('remote_', '');
+        broadcastNetworkEvent({
+          type: 'DAMAGE_PLAYER',
+          targetUid,
+          attackerName: attacker ? attacker.name : 'Enemy',
+          amount: Math.round(rawDamage)
+        });
+        spawnFloatingText(target.x, target.y - 26, `-${Math.round(rawDamage)}`, textColor);
+        AudioEngine.hit();
+        return;
+      }
+
+      let dmg = Math.max(10, Math.round(rawDamage));
+      if (target.shield && target.shield > 0) {
+        const absorbed = Math.min(target.shield, dmg);
+        target.shield -= absorbed;
+        dmg -= absorbed;
+      }
+
+      target.hp -= dmg;
+      if (dmg > 0) {
+        spawnFloatingText(
+          target.x + (Math.random() * 18 - 9),
+          target.y - target.radius - 6,
+          `-${dmg}`,
+          textColor
+        );
+      }
+
+      if (target.hp <= 0) {
+        target.hp = 0;
+        target.alive = false;
+        handleEntityDeath(attacker, target);
+      }
+    }
+
+    function handleEntityDeath(killer, victim) {
+      gameState.effects.push({
+        type: 'NOVA',
+        x: victim.x,
+        y: victim.y,
+        radius: victim.radius * 2.2,
+        color: victim.team === TEAM_BLUE ? '#38bdf8' : '#f43f5e',
+        timer: 0.5,
+        maxTimer: 0.5
+      });
+
+      if (victim.kind === 'MINION') {
+        if (killer && killer.isPlayer) {
+          const goldReward = victim.isCaster ? 18 : 24;
+          killer.gold += goldReward;
+          killer.cs++;
+          gainXp(killer, 32);
+          AudioEngine.gold();
+          spawnFloatingText(victim.x, victim.y - 18, `+${goldReward}g`, '#fbbf24');
+          renderShop();
+        } else if (killer && killer.kind === 'CHAMPION') {
+          gainXp(killer, 32);
+        }
+      } else if (victim.kind === 'CHAMPION') {
+        victim.deaths++;
+        victim.respawnTimer = 6.0;
+        victim.moveTarget = null;
+        victim.attackTarget = null;
+
+        if (victim.team === TEAM_RED) gameState.blueKills++;
+        else gameState.redKills++;
+
+        if (killer && killer.kind === 'CHAMPION') {
+          killer.kills++;
+          killer.gold += 300;
+          gainXp(killer, 140);
+          if (killer.isPlayer) {
+            spawnFloatingText(victim.x, victim.y - 24, '+300g SHUTDOWN!', '#fbbf24');
+            renderShop();
+          }
+        }
+
+        const killerName = killer ? killer.name : 'Turret';
+        const announceText = `${killerName.toUpperCase()} HAS SLAIN ${victim.name.toUpperCase()}!`;
+        showAnnouncement(announceText, victim.team === TEAM_RED ? 'text-sky-400' : 'text-rose-400');
+
+        if (netState.roomCode) {
+          broadcastNetworkEvent({ type: 'ANNOUNCE', text: announceText, color: 'text-amber-300' });
+        }
+
+        logAwsEvent('EventBridge', 'ChampionEliminated', {
+          killer: killerName,
+          victim: victim.name,
+          score: `${gameState.blueKills}-${gameState.redKills}`
+        });
+
+        if (victim.isPlayer) {
+          document.getElementById('respawnOverlay').classList.remove('hidden');
+        }
+      } else if (victim.type === 'TURRET') {
+        if (killer && killer.isPlayer) {
+          killer.gold += 250;
+          gainXp(killer, 180);
+          renderShop();
+        }
+        showAnnouncement(`${victim.team} ${victim.lane} TURRET DESTROYED!`);
+      } else if (victim.type === 'NEXUS') {
+        endMatch(victim.team !== netState.myTeam);
+      }
+    }
+
+    function gainXp(champ, amount) {
+      champ.xp += amount;
+      while (champ.xp >= champ.xpToNext) {
+        champ.xp -= champ.xpToNext;
+        champ.level++;
+        champ.xpToNext = Math.round(champ.xpToNext * 1.25);
+        champ.maxHp += 85;
+        champ.hp = Math.min(champ.maxHp, champ.hp + 120);
+        champ.maxMana += 45;
+        champ.mana = Math.min(champ.maxMana, champ.mana + 80);
+        champ.ad += 5;
+        champ.ap += 8;
+        if (champ.isPlayer) {
+          spawnFloatingText(champ.x, champ.y - 42, `LEVEL UP! (${champ.level})`, '#fde047');
+        }
+      }
+    }
+
+    function endMatch(didWin) {
+      gameState.running = false;
+      const p = gameState.player;
+      const overlay = document.getElementById('gameOverOverlay');
+      const title = document.getElementById('gameOverTitle');
+      title.textContent = didWin ? 'VICTORY' : 'DEFEAT';
+      title.className = `font-display text-3xl font-extrabold tracking-widest ${didWin ? 'text-amber-400' : 'text-rose-500'}`;
+
+      document.getElementById('endMatchId').textContent = netState.roomCode || gameState.matchId;
+      document.getElementById('endKda').textContent = `${p.kills} / ${p.deaths} / ${p.assists}`;
+      document.getElementById('endMmr').textContent = didWin ? '+24 LP (1,842 MMR)' : '-16 LP (1,802 MMR)';
+
+      logAwsEvent('DynamoDB', 'PutItem:PostMatchResults', {
+        room: netState.roomCode || 'SOLO',
+        winner: didWin ? netState.myTeam : 'ENEMY',
+        durationSec: Math.round(gameState.matchTime)
+      });
+      overlay.classList.remove('hidden');
+    }
+
+    function spawnFloatingText(x, y, text, color) {
+      gameState.floatingTexts.push({ x, y, text, color, life: 1.0 });
+    }
+
+    // =========================================================================
+    // 7. SIMULATION UPDATE LOOP (CLIENT PREDICTION + REMOTE INTERPOLATION)
+    // =========================================================================
+    function update(dt) {
+      if (!gameState.running) return;
+
+      gameState.matchTime += dt;
+
+      // Minion wave spawner (Host or Solo controls wave spawning)
+      gameState.waveTimer -= dt;
+      if (gameState.waveTimer <= 0) {
+        spawnMinionWave();
+        gameState.waveTimer = 22.0;
+      }
+
+      gameState.entities.forEach(ent => {
+        if (ent.kind !== 'CHAMPION') return;
+
+        // Smooth interpolation for remote human friends
+        if (ent.isRemoteHuman) {
+          if (typeof ent.targetX === 'number') {
+            ent.x += (ent.targetX - ent.x) * Math.min(1, dt * 14);
+            ent.y += (ent.targetY - ent.y) * Math.min(1, dt * 14);
+          }
+          return;
+        }
+
+        if (!ent.alive) {
+          ent.respawnTimer -= dt;
+          if (ent.isPlayer) {
+            document.getElementById('respawnTimerText').textContent = `${Math.max(0, ent.respawnTimer).toFixed(1)}s`;
+          }
+          if (ent.respawnTimer <= 0) {
+            ent.alive = true;
+            ent.x = ent.spawnX;
+            ent.y = ent.spawnY;
+            ent.hp = ent.maxHp;
+            ent.mana = ent.maxMana;
+            if (ent.isPlayer) document.getElementById('respawnOverlay').classList.add('hidden');
+          }
+          return;
+        }
+
+        if (Math.hypot(ent.x - ent.spawnX, ent.y - ent.spawnY) < 190) {
+          ent.hp = Math.min(ent.maxHp, ent.hp + ent.maxHp * 0.25 * dt);
+          ent.mana = Math.min(ent.maxMana, ent.mana + ent.maxMana * 0.35 * dt);
+        } else {
+          ent.hp = Math.min(ent.maxHp, ent.hp + 4 * dt);
+          ent.mana = Math.min(ent.maxMana, ent.mana + 7 * dt);
+        }
+
+        ent.gold += 2.2 * dt;
+
+        Object.keys(ent.cooldowns).forEach(k => {
+          if (ent.cooldowns[k] > 0) ent.cooldowns[k] = Math.max(0, ent.cooldowns[k] - dt);
+        });
+
+        ent.inBush = BUSHES.some(b => ent.x >= b.x && ent.x <= b.x + b.w && ent.y >= b.y && ent.y <= b.y + b.h);
+      });
+
+      updatePlayer(dt);
+      updateAIEntities(dt);
+      updateStructures(dt);
+      updateProjectiles(dt);
+
+      // Network synchronization heartbeat
+      pushLocalPlayerState();
+      if (netState.isHost) pushHostWorldState();
+
+      gameState.effects.forEach(ef => ef.timer -= dt);
+      gameState.effects = gameState.effects.filter(ef => ef.timer > 0);
+
+      gameState.floatingTexts.forEach(ft => { ft.y -= 32 * dt; ft.life -= dt; });
+      gameState.floatingTexts = gameState.floatingTexts.filter(ft => ft.life > 0);
+
+      gameState.clickMarkers.forEach(cm => cm.timer -= dt);
+      gameState.clickMarkers = gameState.clickMarkers.filter(cm => cm.timer > 0);
+
+      gameState.entities = gameState.entities.filter(e => e.kind === 'CHAMPION' || e.alive);
+
+      if (gameState.cameraLocked && gameState.player) {
+        gameState.camera.x = gameState.player.x;
+        gameState.camera.y = gameState.player.y;
+      } else {
+        const camSpeed = 680 * dt;
+        if (gameState.keys['ArrowUp']) gameState.camera.y -= camSpeed;
+        if (gameState.keys['ArrowDown']) gameState.camera.y += camSpeed;
+        if (gameState.keys['ArrowLeft']) gameState.camera.x -= camSpeed;
+        if (gameState.keys['ArrowRight']) gameState.camera.x += camSpeed;
+      }
+      gameState.camera.x = clamp(gameState.camera.x, 300, WORLD_SIZE - 300);
+      gameState.camera.y = clamp(gameState.camera.y, 240, WORLD_SIZE - 240);
+    }
+
+    function updatePlayer(dt) {
+      const p = gameState.player;
+      if (!p || !p.alive) return;
+      p.attackCooldown = Math.max(0, p.attackCooldown - dt);
+
+      // Ignore WASD movement if typing in chat input
+      if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+      let kx = 0, ky = 0;
+      if (gameState.keys['w'] || gameState.keys['W']) ky -= 1;
+      if (gameState.keys['s'] || gameState.keys['S']) ky += 1;
+      if (gameState.keys['a'] || gameState.keys['A']) kx -= 1;
+      if (gameState.keys['d'] || gameState.keys['D']) kx += 1;
+
+      if (kx !== 0 || ky !== 0) {
+        const len = Math.hypot(kx, ky);
+        p.x = clamp(p.x + (kx / len) * p.speed * dt, 60, WORLD_SIZE - 60);
+        p.y = clamp(p.y + (ky / len) * p.speed * dt, 60, WORLD_SIZE - 60);
+        p.moveTarget = null;
+        p.attackTarget = null;
+        return;
+      }
+
+      if (p.attackTarget) {
+        const t = p.attackTarget;
+        if (!t.alive) {
+          p.attackTarget = null;
+        } else {
+          const dist = Math.hypot(t.x - p.x, t.y - p.y);
+          if (dist <= p.attackRange + t.radius) {
+            if (p.attackCooldown <= 0) {
+              fireAutoAttack(p, t);
+              p.attackCooldown = p.attackInterval;
+            }
+          } else {
+            const ang = Math.atan2(t.y - p.y, t.x - p.x);
+            p.x += Math.cos(ang) * p.speed * dt;
+            p.y += Math.sin(ang) * p.speed * dt;
+          }
+          return;
+        }
+      }
+
+      if (p.moveTarget) {
+        const dx = p.moveTarget.x - p.x;
+        const dy = p.moveTarget.y - p.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 6) {
+          p.moveTarget = null;
+        } else {
+          p.x = clamp(p.x + (dx / dist) * p.speed * dt, 60, WORLD_SIZE - 60);
+          p.y = clamp(p.y + (dy / dist) * p.speed * dt, 60, WORLD_SIZE - 60);
+        }
+      }
+    }
+
+    function updateAIEntities(dt) {
+      gameState.entities.forEach(ent => {
+        if (ent.isPlayer || ent.isRemoteHuman || !ent.alive) return;
+        ent.attackCooldown = Math.max(0, ent.attackCooldown - dt);
+
+        const aggroRange = ent.kind === 'CHAMPION' ? 380 : 260;
+        let bestTarget = null;
+        let bestDist = aggroRange;
+
+        [...gameState.entities, ...gameState.structures].forEach(c => {
+          if (!c.alive || c.team === ent.team) return;
+          if (c.inBush && Math.hypot(c.x - ent.x, c.y - ent.y) > 95) return;
+          const d = Math.hypot(c.x - ent.x, c.y - ent.y);
+          if (d < bestDist) {
+            bestDist = d;
+            bestTarget = c;
+          }
+        });
+
+        if (ent.kind === 'CHAMPION' && ent.hp < ent.maxHp * 0.28) {
+          const ang = Math.atan2(ent.spawnY - ent.y, ent.spawnX - ent.x);
+          ent.x += Math.cos(ang) * ent.speed * dt;
+          ent.y += Math.sin(ang) * ent.speed * dt;
+          return;
+        }
+
+        if (bestTarget) {
+          const dist = Math.hypot(bestTarget.x - ent.x, bestTarget.y - ent.y);
+          if (dist <= ent.attackRange + bestTarget.radius) {
+            if (ent.attackCooldown <= 0) {
+              fireAutoAttack(ent, bestTarget);
+              ent.attackCooldown = ent.attackInterval;
+            }
+          } else {
+            const ang = Math.atan2(bestTarget.y - ent.y, bestTarget.x - ent.x);
+            ent.x += Math.cos(ang) * ent.speed * dt;
+            ent.y += Math.sin(ang) * ent.speed * dt;
+          }
+        } else {
+          const path = LANE_PATHS[ent.lane];
+          if (!path) return;
+          if (ent.kind === 'MINION') {
+            const wp = path[ent.waypointIdx];
+            if (!wp) return;
+            const dx = wp.x - ent.x;
+            const dy = wp.y - ent.y;
+            const d = Math.hypot(dx, dy);
+            if (d < 28) {
+              ent.waypointIdx = clamp(ent.waypointIdx + (ent.team === TEAM_BLUE ? 1 : -1), 0, path.length - 1);
+            } else {
+              ent.x += (dx / d) * ent.speed * dt;
+              ent.y += (dy / d) * ent.speed * dt;
+            }
+          } else if (ent.kind === 'CHAMPION') {
+            const midWp = path[2];
+            const dx = midWp.x - ent.x;
+            const dy = midWp.y - ent.y;
+            const d = Math.hypot(dx, dy);
+            if (d > 45) {
+              ent.x += (dx / d) * ent.speed * dt;
+              ent.y += (dy / d) * ent.speed * dt;
+            }
+          }
+        }
+      });
+    }
+
+    function updateStructures(dt) {
+      gameState.structures.forEach(st => {
+        if (!st.alive) return;
+        st.attackCooldown = Math.max(0, st.attackCooldown - dt);
+
+        let target = null;
+        let minMinionDist = st.range;
+        let minChampDist = st.range;
+        let champTarget = null;
+
+        gameState.entities.forEach(e => {
+          if (!e.alive || e.team === st.team) return;
+          const d = Math.hypot(e.x - st.x, e.y - st.y);
+          if (d <= st.range) {
+            if (e.kind === 'MINION' && d < minMinionDist) {
+              minMinionDist = d;
+              target = e;
+            } else if (e.kind === 'CHAMPION' && d < minChampDist) {
+              minChampDist = d;
+              champTarget = e;
+            }
+          }
+        });
+
+        st.targetId = target ? target.id : champTarget ? champTarget.id : null;
+        const chosen = target || champTarget;
+
+        if (chosen && st.attackCooldown <= 0) {
+          st.attackCooldown = st.attackInterval;
+          const ang = Math.atan2(chosen.y - st.y, chosen.x - st.x);
+          gameState.projectiles.push({
+            team: st.team,
+            owner: st,
+            target: chosen,
+            homing: true,
+            x: st.x,
+            y: st.y,
+            vx: Math.cos(ang) * 620,
+            vy: Math.sin(ang) * 620,
+            radius: 10,
+            dmg: st.dmg,
+            color: st.team === TEAM_BLUE ? '#38bdf8' : '#f43f5e',
+            life: 1.5
+          });
+        }
+      });
+    }
+
+    function fireAutoAttack(attacker, target) {
+      const ang = Math.atan2(target.y - attacker.y, target.x - attacker.x);
+      if (attacker.attackRange <= 130) {
+        dealDamage(attacker, target, attacker.ad, attacker.team === TEAM_BLUE ? '#7dd3fc' : '#fda4af');
+        return;
+      }
+      gameState.projectiles.push({
+        team: attacker.team,
+        owner: attacker,
+        target,
+        homing: true,
+        x: attacker.x,
+        y: attacker.y,
+        vx: Math.cos(ang) * 720,
+        vy: Math.sin(ang) * 720,
+        radius: attacker.kind === 'CHAMPION' ? 7 : 5,
+        dmg: attacker.ad + (attacker.ap ? attacker.ap * 0.2 : 0),
+        color: attacker.team === TEAM_BLUE ? '#38bdf8' : '#fb7185',
+        life: 1.2
+      });
+    }
+
+    function updateProjectiles(dt) {
+      gameState.projectiles.forEach(proj => {
+        proj.life -= dt;
+        if (proj.homing && proj.target) {
+          if (!proj.target.alive) { proj.life = 0; return; }
+          const ang = Math.atan2(proj.target.y - proj.y, proj.target.x - proj.x);
+          const speed = Math.hypot(proj.vx, proj.vy);
+          proj.vx = Math.cos(ang) * speed;
+          proj.vy = Math.sin(ang) * speed;
+        }
+        proj.x += proj.vx * dt;
+        proj.y += proj.vy * dt;
+
+        if (proj.homing && proj.target) {
+          if (Math.hypot(proj.target.x - proj.x, proj.target.y - proj.y) <= proj.target.radius + proj.radius) {
+            dealDamage(proj.owner, proj.target, proj.dmg, proj.color);
+            proj.life = 0;
+          }
+        } else {
+          [...gameState.entities, ...gameState.structures].forEach(t => {
+            if (!t.alive || t.team === proj.team) return;
+            if (proj.hitIds && proj.hitIds.has(t.id)) return;
+            if (Math.hypot(t.x - proj.x, t.y - proj.y) <= t.radius + proj.radius) {
+              if (!proj.isRemoteVisual) dealDamage(proj.owner, t, proj.dmg, proj.color);
+              if (proj.hitIds) proj.hitIds.add(t.id);
+              if (!proj.pierce) proj.life = 0;
+            }
+          });
+        }
+      });
+      gameState.projectiles = gameState.projectiles.filter(p => p.life > 0);
+    }
+
+    // =========================================================================
+    // 8. FOG OF WAR & CANVAS RENDERER
+    // =========================================================================
+    function isVisibleToMyTeam(x, y, inBush = false) {
+      const myTeam = netState.myTeam;
+      const visionSources = [
+        ...gameState.entities.filter(e => e.alive && e.team === myTeam),
+        ...gameState.structures.filter(s => s.alive && s.team === myTeam)
+      ];
+      for (const src of visionSources) {
+        const vRange = src.kind === 'CHAMPION' ? 620 : src.type ? 460 : 340;
+        const dist = Math.hypot(src.x - x, src.y - y);
+        if (dist <= vRange) {
+          if (inBush && dist > 110 && !src.inBush) continue;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function render() {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.save();
+      const offsetX = Math.round(w / 2 - gameState.camera.x);
+      const offsetY = Math.round(h / 2 - gameState.camera.y);
+      ctx.translate(offsetX, offsetY);
+
+      drawArenaTerrain();
+      drawStructures();
+      drawEntities();
+      drawProjectilesAndEffects();
+      drawFogOfWarOverlay();
+      drawFloatingTextsAndMarkers();
+
+      ctx.restore();
+      drawMinimap();
+    }
+
+    function drawArenaTerrain() {
+      ctx.fillStyle = '#0c1524';
+      ctx.fillRect(0, 0, WORLD_SIZE, WORLD_SIZE);
+
+      ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
+      ctx.lineWidth = 1;
+      for (let gx = 0; gx <= WORLD_SIZE; gx += 130) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, WORLD_SIZE); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, gx); ctx.lineTo(WORLD_SIZE, gx); ctx.stroke();
+      }
+
+      // River
+      ctx.save();
+      ctx.strokeStyle = '#0c3559';
+      ctx.lineWidth = 175;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(180, 180); ctx.lineTo(2420, 2420); ctx.stroke();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)';
+      ctx.lineWidth = 95;
+      ctx.beginPath(); ctx.moveTo(180, 180); ctx.lineTo(2420, 2420); ctx.stroke();
+      ctx.restore();
+
+      // 3 Lanes
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      Object.values(LANE_PATHS).forEach(path => {
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 152;
+        ctx.beginPath();
+        path.forEach((pt, idx) => idx === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+        ctx.stroke();
+
+        ctx.strokeStyle = '#172033';
+        ctx.lineWidth = 128;
+        ctx.beginPath();
+        path.forEach((pt, idx) => idx === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y));
+        ctx.stroke();
+      });
+      ctx.restore();
+
+      // Blue & Red Base Glows
+      const blueGrad = ctx.createRadialGradient(250, 2350, 30, 250, 2350, 340);
+      blueGrad.addColorStop(0, 'rgba(14, 165, 233, 0.35)');
+      blueGrad.addColorStop(1, 'rgba(14, 165, 233, 0)');
+      ctx.fillStyle = blueGrad;
+      ctx.beginPath(); ctx.arc(250, 2350, 340, 0, Math.PI * 2); ctx.fill();
+
+      const redGrad = ctx.createRadialGradient(2350, 250, 30, 2350, 250, 340);
+      redGrad.addColorStop(0, 'rgba(244, 63, 94, 0.35)');
+      redGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');
+      ctx.fillStyle = redGrad;
+      ctx.beginPath(); ctx.arc(2350, 250, 340, 0, Math.PI * 2); ctx.fill();
+
+      // Bushes
+      BUSHES.forEach(b => {
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.22)';
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.45)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(b.x, b.y, b.w, b.h, 18);
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 12;
+      ctx.strokeRect(0, 0, WORLD_SIZE, WORLD_SIZE);
+    }
+
+    function drawStructures() {
+      gameState.structures.forEach(st => {
+        if (!st.alive) return;
+        const isBlue = st.team === TEAM_BLUE;
+        const primary = isBlue ? '#38bdf8' : '#f43f5e';
+
+        if (st.team !== netState.myTeam && gameState.player && gameState.player.alive) {
+          const d = Math.hypot(gameState.player.x - st.x, gameState.player.y - st.y);
+          if (d < st.range + 180) {
+            ctx.strokeStyle = st.targetId === gameState.player.id ? 'rgba(244, 63, 94, 0.65)' : 'rgba(244, 63, 94, 0.22)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.arc(st.x, st.y, st.range, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+
+        if (st.targetId) {
+          const target = gameState.entities.find(e => e.id === st.targetId);
+          if (target && target.alive) {
+            ctx.strokeStyle = isBlue ? 'rgba(56, 189, 248, 0.45)' : 'rgba(244, 63, 94, 0.55)';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(st.x, st.y); ctx.lineTo(target.x, target.y); ctx.stroke();
+          }
+        }
+
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = primary;
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(st.x, st.y, st.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = primary;
+        ctx.beginPath(); ctx.arc(st.x, st.y, st.radius * 0.45, 0, Math.PI * 2); ctx.fill();
+
+        drawHealthBar(st.x, st.y - st.radius - 14, st.type === 'NEXUS' ? 84 : 56, 7, st.hp, st.maxHp, primary);
+      });
+    }
+
+    function drawEntities() {
+      gameState.entities.forEach(ent => {
+        if (!ent.alive) return;
+        if (ent.team !== netState.myTeam && !isVisibleToMyTeam(ent.x, ent.y, ent.inBush)) return;
+
+        ctx.save();
+        if (ent.inBush) ctx.globalAlpha = 0.62;
+
+        const isBlue = ent.team === TEAM_BLUE;
+        const ringColor = ent.isPlayer ? '#fbbf24' : ent.isRemoteHuman ? '#a855f7' : isBlue ? '#38bdf8' : '#f43f5e';
+
+        if (ent.isPlayer) {
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(ent.x, ent.y, ent.attackRange, 0, Math.PI * 2); ctx.stroke();
+        }
+
+        ctx.fillStyle = ent.kind === 'CHAMPION' ? (ent.color || ringColor) : (isBlue ? '#0284c7' : '#e11d48');
+        ctx.strokeStyle = ringColor;
+        ctx.lineWidth = ent.isPlayer || ent.isRemoteHuman ? 3.5 : 2;
+        ctx.beginPath(); ctx.arc(ent.x, ent.y, ent.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+        if (ent.shield && ent.shield > 0) {
+          ctx.strokeStyle = '#34d399';
+          ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(ent.x, ent.y, ent.radius + 5, 0, Math.PI * 2); ctx.stroke();
+        }
+
+        if (ent.kind === 'CHAMPION') {
+          drawHealthBar(ent.x, ent.y - ent.radius - 14, 58, 7, ent.hp, ent.maxHp, isBlue ? '#10b981' : '#f43f5e', ent.shield);
+          ctx.font = 'bold 11px Inter, sans-serif';
+          ctx.fillStyle = ent.isPlayer ? '#fde047' : ent.isRemoteHuman ? '#e879f9' : '#e2e8f0';
+          ctx.textAlign = 'center';
+          const tag = ent.isRemoteHuman ? '★ ' : '';
+          ctx.fillText(`${tag}Lv.${ent.level} ${ent.name}`, ent.x, ent.y - ent.radius - 20);
+        } else {
+          drawHealthBar(ent.x, ent.y - ent.radius - 8, 28, 4, ent.hp, ent.maxHp, isBlue ? '#38bdf8' : '#fb7185');
+        }
+        ctx.restore();
+      });
+    }
+
+    function drawHealthBar(x, y, w, h, hp, maxHp, fillColor, shield = 0) {
+      const pct = clamp(hp / maxHp, 0, 1);
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+      ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
+      ctx.fillStyle = fillColor;
+      ctx.fillRect(x - w / 2, y, w * pct, h);
+      if (shield > 0) {
+        const sPct = clamp(shield / maxHp, 0, 0.5);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(x - w / 2 + w * pct * (1 - sPct), y, w * sPct, h);
+      }
+    }
+
+    function drawProjectilesAndEffects() {
+      gameState.effects.forEach(ef => {
+        const alpha = clamp(ef.timer / ef.maxTimer, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        if (ef.type === 'NOVA') {
+          ctx.fillStyle = ef.color;
+          ctx.beginPath(); ctx.arc(ef.x, ef.y, ef.radius * (1.15 - alpha * 0.25), 0, Math.PI * 2); ctx.fill();
+        } else if (ef.type === 'BEAM') {
+          ctx.strokeStyle = ef.color;
+          ctx.lineWidth = ef.width * alpha;
+          ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(ef.x1, ef.y1); ctx.lineTo(ef.x2, ef.y2); ctx.stroke();
+
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = ef.width * 0.35 * alpha;
+          ctx.beginPath(); ctx.moveTo(ef.x1, ef.y1); ctx.lineTo(ef.x2, ef.y2); ctx.stroke();
+        }
+        ctx.restore();
+      });
+
+      gameState.projectiles.forEach(p => {
+        ctx.save();
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 12;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    function drawFogOfWarOverlay() {
+      const p = gameState.player;
+      if (!p || !p.alive) return;
+      const grad = ctx.createRadialGradient(p.x, p.y, 440, p.x, p.y, 820);
+      grad.addColorStop(0, 'rgba(4, 8, 16, 0)');
+      grad.addColorStop(1, 'rgba(4, 8, 16, 0.55)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(p.x - 1400, p.y - 1400, 2800, 2800);
+    }
+
+    function drawFloatingTextsAndMarkers() {
+      gameState.clickMarkers.forEach(cm => {
+        ctx.save();
+        ctx.strokeStyle = cm.isAttack ? '#f43f5e' : '#34d399';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = cm.timer / 0.45;
+        ctx.beginPath(); ctx.arc(cm.x, cm.y, (1 - cm.timer / 0.45) * 26 + 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      });
+
+      gameState.floatingTexts.forEach(ft => {
+        ctx.save();
+        ctx.globalAlpha = clamp(ft.life, 0, 1);
+        ctx.font = 'bold 13px "JetBrains Mono", monospace';
+        ctx.fillStyle = ft.color;
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 4;
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.restore();
+      });
+    }
+
+    function drawMinimap() {
+      const mw = minimapCanvas.width;
+      const mh = minimapCanvas.height;
+      const scale = mw / WORLD_SIZE;
+
+      mctx.clearRect(0, 0, mw, mh);
+      mctx.fillStyle = '#070d17';
+      mctx.fillRect(0, 0, mw, mh);
+
+      mctx.strokeStyle = '#0e3a5e';
+      mctx.lineWidth = 10;
+      mctx.beginPath(); mctx.moveTo(10, 10); mctx.lineTo(mw - 10, mh - 10); mctx.stroke();
+
+      mctx.strokeStyle = '#1e293b';
+      mctx.lineWidth = 7;
+      Object.values(LANE_PATHS).forEach(path => {
+        mctx.beginPath();
+        path.forEach((pt, idx) => idx === 0 ? mctx.moveTo(pt.x * scale, pt.y * scale) : mctx.lineTo(pt.x * scale, pt.y * scale));
+        mctx.stroke();
+      });
+
+      gameState.structures.forEach(st => {
+        if (!st.alive) return;
+        mctx.fillStyle = st.team === TEAM_BLUE ? '#38bdf8' : '#f43f5e';
+        mctx.fillRect(st.x * scale - 2.5, st.y * scale - 2.5, 5, 5);
+      });
+
+      gameState.entities.forEach(ent => {
+        if (!ent.alive) return;
+        if (ent.team !== netState.myTeam && !isVisibleToMyTeam(ent.x, ent.y, ent.inBush)) return;
+        mctx.fillStyle = ent.isPlayer ? '#fbbf24' : ent.isRemoteHuman ? '#e879f9' : ent.team === TEAM_BLUE ? '#7dd3fc' : '#fb7185';
+        const r = ent.kind === 'CHAMPION' ? 3.5 : 1.6;
+        mctx.beginPath(); mctx.arc(ent.x * scale, ent.y * scale, r, 0, Math.PI * 2); mctx.fill();
+      });
+
+      const vw = canvas.width * scale;
+      const vh = canvas.height * scale;
+      mctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      mctx.lineWidth = 1;
+      mctx.strokeRect(gameState.camera.x * scale - vw / 2, gameState.camera.y * scale - vh / 2, vw, vh);
+    }
+
+    function updateHud() {
+      const p = gameState.player;
+      if (!p) return;
+
+      document.getElementById('blueKillsEl').textContent = gameState.blueKills;
+      document.getElementById('redKillsEl').textContent = gameState.redKills;
+      const mins = String(Math.floor(gameState.matchTime / 60)).padStart(2, '0');
+      const secs = String(Math.floor(gameState.matchTime % 60)).padStart(2, '0');
+      document.getElementById('matchTimerEl').textContent = `${mins}:${secs}`;
+      document.getElementById('playerKdaEl').textContent = `${p.kills}/${p.deaths}/${p.assists}`;
+      document.getElementById('playerCsEl').textContent = p.cs;
+
+      document.getElementById('champLevelBadge').textContent = p.level;
+      document.getElementById('statAd').textContent = Math.round(p.ad);
+      document.getElementById('statAp').textContent = Math.round(p.ap);
+      document.getElementById('statArm').textContent = Math.round(p.armor);
+      document.getElementById('statSpd').textContent = Math.round(p.speed);
+      document.getElementById('playerGoldEl').textContent = `${Math.floor(p.gold)}g`;
+
+      document.getElementById('hpBarFill').style.width = `${clamp((p.hp / p.maxHp) * 100, 0, 100)}%`;
+      document.getElementById('shieldBarFill').style.width = `${clamp((p.shield / p.maxHp) * 100, 0, 100)}%`;
+      document.getElementById('hpBarText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}${p.shield > 0 ? ` (+${Math.round(p.shield)})` : ''}`;
+
+      document.getElementById('manaBarFill').style.width = `${clamp((p.mana / p.maxMana) * 100, 0, 100)}%`;
+      document.getElementById('manaBarText').textContent = `${Math.ceil(p.mana)} / ${p.maxMana}`;
+      document.getElementById('xpBarFill').style.width = `${clamp((p.xp / p.xpToNext) * 100, 0, 100)}%`;
+
+      ['Q', 'W', 'E', 'R', 'D', 'F'].forEach(k => {
+        const ov = document.getElementById(`cdOverlay${k}`);
+        const cd = p.cooldowns[k];
+        if (cd > 0) {
+          ov.classList.remove('hidden');
+          ov.textContent = cd >= 10 ? Math.ceil(cd) : cd.toFixed(1);
+        } else {
+          ov.classList.add('hidden');
+        }
+      });
+    }
+
+    // =========================================================================
+    // 9. UI & MULTIPLAYER LOBBY EVENT WIRING
+    // =========================================================================
+    function resizeCanvas() {
+      canvas.width = canvasContainer.clientWidth;
+      canvas.height = canvasContainer.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      gameState.mouseScreen.x = e.clientX - rect.left;
+      gameState.mouseScreen.y = e.clientY - rect.top;
+      gameState.mouseWorld.x = gameState.mouseScreen.x - canvas.width / 2 + gameState.camera.x;
+      gameState.mouseWorld.y = gameState.mouseScreen.y - canvas.height / 2 + gameState.camera.y;
+    });
+
+    canvas.addEventListener('mousedown', e => {
+      const rect = canvas.getBoundingClientRect();
+      const wx = (e.clientX - rect.left) - canvas.width / 2 + gameState.camera.x;
+      const wy = (e.clientY - rect.top) - canvas.height / 2 + gameState.camera.y;
+      gameState.mouseWorld.x = wx;
+      gameState.mouseWorld.y = wy;
+
+      const p = gameState.player;
+      if (!p || !p.alive) return;
+
+      if (e.button === 2 || e.button === 0) {
+        const targets = [...gameState.entities, ...gameState.structures];
+        let clickedEnemy = null;
+        for (const t of targets) {
+          if (!t.alive || t.team === p.team) continue;
+          if (Math.hypot(t.x - wx, t.y - wy) <= t.radius + 14) {
+            clickedEnemy = t;
+            break;
+          }
+        }
+        if (clickedEnemy) {
+          p.attackTarget = clickedEnemy;
+          p.moveTarget = null;
+          gameState.clickMarkers.push({ x: clickedEnemy.x, y: clickedEnemy.y, timer: 0.45, isAttack: true });
+        } else if (e.button === 2) {
+          p.attackTarget = null;
+          p.moveTarget = { x: clamp(wx, 60, WORLD_SIZE - 60), y: clamp(wy, 60, WORLD_SIZE - 60) };
+          gameState.clickMarkers.push({ x: p.moveTarget.x, y: p.moveTarget.y, timer: 0.45, isAttack: false });
+        }
+      }
+    });
+
+    canvas.addEventListener('touchstart', e => {
+      if (e.touches.length === 0) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const wx = (touch.clientX - rect.left) - canvas.width / 2 + gameState.camera.x;
+      const wy = (touch.clientY - rect.top) - canvas.height / 2 + gameState.camera.y;
+      gameState.mouseWorld.x = wx;
+      gameState.mouseWorld.y = wy;
+
+      const p = gameState.player;
+      if (!p || !p.alive) return;
+      p.moveTarget = { x: clamp(wx, 60, WORLD_SIZE - 60), y: clamp(wy, 60, WORLD_SIZE - 60) };
+      gameState.clickMarkers.push({ x: p.moveTarget.x, y: p.moveTarget.y, timer: 0.45, isAttack: false });
+    }, { passive: true });
+
+    minimapCanvas.addEventListener('mousedown', e => {
+      const rect = minimapCanvas.getBoundingClientRect();
+      const scale = WORLD_SIZE / minimapCanvas.width;
+      gameState.cameraLocked = false;
+      document.getElementById('camLockLabel').textContent = 'Free (Y)';
+      gameState.camera.x = (e.clientX - rect.left) * scale;
+      gameState.camera.y = (e.clientY - rect.top) * scale;
+    });
+
+    // Keyboard & In-Game Chat Shortcuts
+    window.addEventListener('keydown', e => {
+      const chatWrapper = document.getElementById('chatInputWrapper');
+      const chatInput = document.getElementById('chatInput');
+
+      if (e.key === 'Enter') {
+        if (document.activeElement === chatInput) {
+          sendInGameChat();
+          chatWrapper.classList.add('hidden');
+          chatInput.blur();
+        } else if (document.getElementById('multiplayerLobbyModal').classList.contains('hidden')) {
+          chatWrapper.classList.remove('hidden');
+          chatInput.focus();
+        }
+        return;
+      }
+
+      if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+      gameState.keys[e.key] = true;
+      const k = e.key.toUpperCase();
+      if (['Q', 'R', 'F'].includes(k) && !e.ctrlKey && !e.metaKey) {
+        window.triggerAbility(k);
+      }
+      if (e.key === '1') window.triggerAbility('Q');
+      if (e.key === '2') window.triggerAbility('W');
+      if (e.key === '3') window.triggerAbility('E');
+      if (e.key === '4') window.triggerAbility('R');
+      if (k === 'B') document.getElementById('shopPanel').classList.toggle('hidden');
+      if (k === 'Y' || e.key === ' ') {
+        gameState.cameraLocked = !gameState.cameraLocked;
+        document.getElementById('camLockLabel').textContent = gameState.cameraLocked ? 'Locked (Y)' : 'Free (Y)';
+      }
+    });
+
+    window.addEventListener('keyup', e => {
+      gameState.keys[e.key] = false;
+    });
+
+    async function sendInGameChat() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      if (db && netState.roomCode) {
+        try {
+          await addDoc(getChatColRef(netState.roomCode), {
+            sender: netState.myName,
+            team: netState.myTeam,
+            text,
+            ts: Date.now()
+          });
+        } catch (_) {}
+      } else {
+        appendChatMessage(netState.myName, netState.myTeam, text);
+      }
+    }
+    document.getElementById('chatSendBtn').onclick = () => {
+      sendInGameChat();
+      document.getElementById('chatInputWrapper').classList.add('hidden');
+    };
+
+    // Lobby Buttons
+    document.getElementById('createRoomBtn').onclick = createMultiplayerRoom;
+    document.getElementById('joinRoomBtn').onclick = () => {
+      joinMultiplayerRoom(document.getElementById('joinRoomCodeInput').value);
+    };
+
+    document.getElementById('copyRoomCodeBtn').onclick = () => {
+      if (!netState.roomCode) return;
+      const temp = document.createElement('textarea');
+      temp.value = netState.roomCode;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+
+      const fb = document.getElementById('copyFeedbackText');
+      fb.classList.remove('hidden');
+      setTimeout(() => fb.classList.add('hidden'), 3000);
+    };
+
+    document.getElementById('switchTeamBtn').onclick = async () => {
+      netState.myTeam = netState.myTeam === 'BLUE' ? 'RED' : 'BLUE';
+      if (db && netState.roomCode) {
+        try {
+          await updateDoc(getPlayerDocRef(netState.roomCode, netState.myUid), { team: netState.myTeam });
+        } catch (_) {}
+      }
+      renderLobbyRoster();
+    };
+
+    document.getElementById('toggleReadyBtn').onclick = async () => {
+      netState.myReady = !netState.myReady;
+      document.getElementById('toggleReadyBtn').textContent = netState.myReady ? '✓ Ready' : 'Not Ready';
+      if (db && netState.roomCode) {
+        try {
+          await updateDoc(getPlayerDocRef(netState.roomCode, netState.myUid), { ready: netState.myReady });
+        } catch (_) {}
+      }
+      renderLobbyRoster();
+    };
+
+    document.getElementById('fillBotsCheckbox').onchange = async (e) => {
+      netState.fillBots = e.target.checked;
+      if (db && netState.roomCode && netState.isHost) {
+        try {
+          await updateDoc(getRoomDocRef(netState.roomCode), { fillBots: netState.fillBots });
+        } catch (_) {}
+      }
+    };
+
+    async function launchMatchFromLobby(broadcastStart = true) {
+      netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Summoner').slice(0, 16);
+      netState.myChamp = document.getElementById('champSelectInput').value;
+      netState.myLane = document.getElementById('laneSelectInput').value;
+
+      if (broadcastStart && db && netState.roomCode && netState.isHost) {
+        try {
+          await updateDoc(getRoomDocRef(netState.roomCode), {
+            status: 'IN_GAME',
+            fillBots: document.getElementById('fillBotsCheckbox').checked
+          });
+        } catch (_) {}
+      }
+
+      document.getElementById('multiplayerLobbyModal').classList.add('hidden');
+      initMatch();
+    }
+
+    document.getElementById('startMultiplayerMatchBtn').onclick = () => launchMatchFromLobby(true);
+    document.getElementById('closeLobbyBtn').onclick = () => launchMatchFromLobby(false);
+    document.getElementById('openLobbyBtn').onclick = () => {
+      renderLobbyRoster();
+      document.getElementById('multiplayerLobbyModal').classList.remove('hidden');
+    };
+    document.getElementById('headerRoomBadge').onclick = () => {
+      renderLobbyRoster();
+      document.getElementById('multiplayerLobbyModal').classList.remove('hidden');
+    };
+    document.getElementById('sidebarLobbyBtn').onclick = () => {
+      renderLobbyRoster();
+      document.getElementById('multiplayerLobbyModal').classList.remove('hidden');
+    };
+    document.getElementById('playAgainBtn').onclick = () => {
+      document.getElementById('gameOverOverlay').classList.add('hidden');
+      document.getElementById('multiplayerLobbyModal').classList.remove('hidden');
+    };
+
+    // Standard HUD & Architecture Modal Controls
+    document.getElementById('toggleShopBtn').onclick = () => {
+      renderShop();
+      document.getElementById('shopPanel').classList.toggle('hidden');
+    };
+    document.getElementById('closeShopBtn').onclick = () => document.getElementById('shopPanel').classList.add('hidden');
+    document.getElementById('cameraLockBtn').onclick = () => {
+      gameState.cameraLocked = !gameState.cameraLocked;
+      document.getElementById('camLockLabel').textContent = gameState.cameraLocked ? 'Locked (Y)' : 'Free (Y)';
+    };
+    document.getElementById('toggleAwsDrawerBtn').onclick = () => {
+      const drawer = document.getElementById('awsTelemetryDrawer');
+      drawer.classList.toggle('hidden');
+      setTimeout(resizeCanvas, 50);
+    };
+    document.getElementById('clearLogsBtn').onclick = () => { document.getElementById('awsEventLog').innerHTML = ''; };
+    document.getElementById('tickRateToggle').onclick = () => {
+      gameState.tickRate = gameState.tickRate === 60 ? 30 : 60;
+      document.getElementById('tickRateToggle').textContent = `${gameState.tickRate}Hz Tick`;
+      document.getElementById('topTickEl').textContent = `${gameState.tickRate}Hz`;
+    };
+
+    const AWS_NODE_DOCS = {
+      client: {
+        title: 'Multiplayer Game Client',
+        metric: 'Entity Interpolation: Enabled | Fog of War: Active',
+        desc: 'Smoothly interpolates remote friends’ coordinates across network updates while predicting local movement and rendering spell projectiles.',
+        payload: `{"uid":"${netState.myUid}","moveVec":[0.71,-0.71],"castSpell":"Q"}`
+      },
+      ga: {
+        title: 'AWS Global Accelerator',
+        metric: 'Edge POP: Nearest -> us-west-2 | Packet Loss: 0.0%',
+        desc: 'Routes multiplayer UDP traffic over the congestion-free AWS private fiber backbone for consistent low ping across regions.',
+        payload: `{"acceleratorArn":"arn:aws:globalaccelerator::123456:accelerator/moba-udp","protocol":"UDP"}`
+      },
+      cognito: {
+        title: 'Amazon Cognito + API Gateway',
+        metric: 'Auth: Anonymous / Custom JWT | Latency: 22ms',
+        desc: 'Authenticates players and authorizes room creation, custom invite codes, and live match chat messages.',
+        payload: `{"uid":"${netState.myUid}","roomCode":"${netState.roomCode || 'SOLO'}"}`
+      },
+      flexmatch: {
+        title: 'Amazon GameLift FlexMatch',
+        metric: 'Custom Lobby + 5v5 Role Fill',
+        desc: 'Supports custom party lobbies where friends join via room code and empty lane slots automatically backfill with AI bots.',
+        payload: `{"roomCode":"${netState.roomCode || 'SOLO'}","fillBots":true}`
+      },
+      gamelift: {
+        title: 'Amazon GameLift Dedicated Fleet (c7g.large)',
+        metric: 'Tick Rate: 60Hz | Graviton3 ARM64',
+        desc: 'Authoritative match loop coordinating minion waves, turret aggro, structure HPs, and player eliminations across all connected clients.',
+        payload: `{"sessionId":"${gameState.matchId}","tickRate":"${gameState.tickRate}Hz"}`
+      },
+      eventbridge: {
+        title: 'Amazon EventBridge + SQS',
+        metric: 'Delivery: At-Least-Once | DLQ: Enabled',
+        desc: 'Streams eliminations, turret destructions, and post-match summaries for asynchronous leaderboard and MMR updates.',
+        payload: `{"source":"aws.gamelift","detail-type":"ChampionEliminated"}`
+      },
+      dynamodb: {
+        title: 'Amazon DynamoDB',
+        metric: 'Read/Write Latency: 3.1ms | On-Demand',
+        desc: 'Persists player profiles, ranked LP/MMR ratings, and item loadouts with single-digit millisecond latency.',
+        payload: `{"TableName":"MobaPlayerProfiles","UpdateExpression":"SET MMR = MMR + 24"}`
+      },
+      redis: {
+        title: 'Amazon ElastiCache for Redis',
+        metric: 'Ops/sec: 48,000 | Sub-millisecond',
+        desc: 'Manages real-time party presence, active room directories, and live Challenger ranked leaderboards.',
+        payload: `ZADD leaderboard:na:challenger 2418 "${netState.myName}"`
+      }
+    };
+
+    window.selectAwsNode = function(nodeKey) {
+      const info = AWS_NODE_DOCS[nodeKey];
+      if (!info) return;
+      document.getElementById('inspectorTitle').textContent = info.title;
+      document.getElementById('inspectorMetric').textContent = info.metric;
+      document.getElementById('inspectorDesc').textContent = info.desc;
+      document.getElementById('inspectorPayload').textContent = info.payload;
+    };
+
+    document.getElementById('openArchModalBtn').onclick = () => {
+      window.selectAwsNode('gamelift');
+      document.getElementById('awsArchModal').classList.remove('hidden');
+    };
+    document.getElementById('closeArchModalBtn').onclick = () => {
+      document.getElementById('awsArchModal').classList.add('hidden');
+    };
+
+    // Telemetry Heartbeat
+    setInterval(() => {
+      const jitter = Math.floor(Math.random() * 5) - 2;
+      const ping = clamp(22 + jitter, 15, 34);
+      const activeEntities = gameState.entities.length + gameState.structures.filter(s => s.alive).length + gameState.projectiles.length;
+      const frameMs = (1.9 + activeEntities * 0.045).toFixed(1);
+      const budgetMs = gameState.tickRate === 60 ? 16.6 : 33.3;
+
+      document.getElementById('topPingEl').textContent = `${ping}ms`;
+      document.getElementById('hudPingVal').textContent = ping;
+      document.getElementById('hudEntitiesVal').textContent = activeEntities;
+      document.getElementById('hudFrameTime').textContent = `${frameMs}ms / ${budgetMs}ms`;
+      document.getElementById('hudCpuBar').style.width = `${clamp((frameMs / budgetMs) * 100, 12, 92)}%`;
+    }, 1200);
+
+    function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+    function pointToSegmentDist(px, py, x1, y1, x2, y2) {
+      const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+      if (l2 === 0) return Math.hypot(px - x1, py - y1);
+      const t = clamp(((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2, 0, 1);
+      return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+    }
+
+    let lastTimestamp = 0;
+    function gameLoop(timestamp) {
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const dt = Math.min(0.05, (timestamp - lastTimestamp) / 1000);
+      lastTimestamp = timestamp;
+
+      update(dt);
+      render();
+      updateHud();
+      requestAnimationFrame(gameLoop);
+    }
+
+    window.onload = async function () {
+      resizeCanvas();
+      await initFirebase();
+      renderLobbyRoster();
+      initMatch();
+      requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>

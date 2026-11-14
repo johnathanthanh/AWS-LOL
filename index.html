@@ -724,79 +724,97 @@
     }
 
     async function createMultiplayerRoom() {
-      const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
-      joinMultiplayerRoom(roomCode);
+    // Generate a clean 4-character room code
+    const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    
+    // Capture user settings from your UI inputs (just like your original code)
+    netState.myName = (document.getElementById('summonerNameInput')?.value.trim() || 'Summoner').slice(0, 16);
+    netState.myChamp = document.getElementById('champSelectInput')?.value || 'Champion';
+    netState.myLane = document.getElementById('laneSelectInput')?.value || 'Top';
+    netState.myTeam = 'BLUE';
+    netState.myReady = true;
+    netState.isHost = true;
+    netState.roomCode = roomCode;
+
+    if (!socket || !socket.connected) {
+        showLobbyError('Cloud network unavailable. Check your server connection.');
+        return;
     }
-      const code = generateRoomCode();
-      netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Summoner').slice(0, 16);
-      netState.myChamp = document.getElementById('champSelectInput').value;
-      netState.myLane = document.getElementById('laneSelectInput').value;
-      netState.myTeam = 'BLUE';
-      netState.myReady = true;
-      netState.isHost = true;
-      netState.roomCode = code;
 
-      try {
-        await setDoc(getRoomDocRef(code), {
-          roomCode: code,
-          hostUid: netState.myUid,
-          status: 'LOBBY',
-          fillBots: document.getElementById('fillBotsCheckbox').checked,
-          createdAt: Date.now(),
-          blueKills: 0,
-          redKills: 0,
-          matchTime: 0,
-          structures: {},
-          recentEvents: []
-        });
+    // Send room creation and player initialization packet to your Render backend
+    socket.emit('joinRoom', {
+        roomCode: roomCode,
+        playerData: {
+            uid: netState.myUid || 'player_' + Math.random().toString(36).substring(2, 8),
+            name: netState.myName,
+            team: netState.myTeam,
+            champ: netState.myChamp,
+            lane: netState.myLane,
+            ready: true,
+            x: 360,
+            y: 2240,
+            hp: 650,
+            maxHp: 650,
+            shield: 0,
+            mana: 400,
+            maxMana: 400,
+            level: 1,
+            kills: 0,
+            deaths: 0,
+            assists: 0,
+            alive: true,
+            inBush: false,
+            lastCast: null,
+            updatedAt: Date.now()
+        }
+    });
 
-        await setDoc(getPlayerDocRef(code, netState.myUid), {
-          uid: netState.myUid,
-          name: netState.myName,
-          team: netState.myTeam,
-          champ: netState.myChamp,
-          lane: netState.myLane,
-          ready: true,
-          x: 360,
-          y: 2240,
-          hp: 650,
-          maxHp: 650,
-          shield: 0,
-          mana: 400,
-          maxMana: 400,
-          level: 1,
-          kills: 0,
-          deaths: 0,
-          assists: 0,
-          alive: true,
-          inBush: false,
-          lastCast: null,
-          updatedAt: Date.now()
-        });
-
-        subscribeToRoom(code);
-        updateLobbyConnectionUI(code, true);
-        logAwsEvent('FlexMatch', 'CustomRoomCreated', { roomCode: code, host: netState.myName });
-      } catch (err) {
-        showLobbyError('Failed to create room: ' + err.message);
-      }
+    // Update your local lobby UI and log telemetry
+    if (typeof updateLobbyConnectionUI === 'function') {
+        updateLobbyConnectionUI(roomCode, true);
     }
+    if (typeof logAwsEvent === 'function') {
+        logAwsEvent('FlexMatch', 'CustomRoomCreated', { roomCode: roomCode, host: netState.myName });
+    }
+
+    console.log(`Created and joined multiplayer room: ${roomCode}`);
+}
 
     async function joinMultiplayerRoom(rawCode) {
-      const roomCode = rawCode || document.getElementById('room-input')?.value.trim();
-      
-      const code = rawCode.trim().toUpperCase();
-      if (code.length !== 6) {
-        showLobbyError('Please enter a valid 6-character Room Code.');
+    // Get the room code from parameter or the input field, and clean it up
+    const roomCode = (rawCode || document.getElementById('room-input')?.value || '').trim().toUpperCase();
+    
+    if (!roomCode || roomCode.length < 4) {
+        showLobbyError('Please enter a valid Room Code.');
         return;
-      }
+    }
 
-      try {
-        const snap = await getDoc(getRoomDocRef(code));
-        if (!snap.exists()) {
-          showLobbyError(`Room "${code}" not found. Double-check the code with your friend.`);
-          return;
+    if (!socket || !socket.connected) {
+        showLobbyError('Cloud network unavailable. Check your server connection.');
+        return;
+    }
+
+    // Pull selected champion (fallback to a default if none selected)
+    const selectedChamp = window.selectedChampion || 'Champion';
+
+    // Tell the Node.js Socket.io server to put us in this room
+    socket.emit('joinRoom', {
+        roomCode: roomCode,
+        playerData: {
+            champion: selectedChamp,
+            x: 400,
+            y: 300,
+            hp: 1000
         }
+    });
+
+    console.log(`Joined room: ${roomCode}`);
+
+    // Transition from the lobby UI into the game canvas/loop
+    if (typeof hideLobbyUI === 'function') {
+        hideLobbyUI();
+    }
+}
         const roomData = snap.data();
         netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Player').slice(0, 16);
         netState.myChamp = document.getElementById('champSelectInput').value;

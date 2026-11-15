@@ -192,7 +192,7 @@
             <div id="champAvatarCircle" class="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-900 border-2 border-amber-400 flex items-center justify-center font-display font-extrabold text-white text-xs shadow-lg">
               LUX
             </div>
-            <span id="champLevelBadge" class="absolute -bottom-1 -right-1 bg-slate-950 border border-amber-400 text-amber-300 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+            <span id="champLevelBadge" class="absolute -bottom-1 -right-1 bg-slate-950 border border-amber-400 text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
               1
             </span>
           </div>
@@ -233,7 +233,7 @@
             <div id="cdOverlayE" class="hidden absolute inset-0 bg-slate-950/85 flex items-center justify-center font-mono-code font-bold text-sm text-white">0.0</div>
           </button>
 
-          <button id="btnR" onclick="triggerAbility('R')" class="ability-btn relative w-12 h-12 sm:w-13 sm:h-13 rounded-lg bg-gradient-to-b from-amber-950/80 to-slate-900 border-2 border-amber-400/80 flex flex-col items-center justify-center overflow-hidden" title="[R] Final Spark Orbital Laser (100 Mana)">
+          <button id="btnR" onclick="triggerAbility('R')" class="ability-btn relative w-12 h-12 sm:w-14 sm:h-14 rounded-lg bg-gradient-to-b from-amber-950/80 to-slate-900 border-2 border-amber-400/80 flex flex-col items-center justify-center overflow-hidden" title="[R] Final Spark Orbital Laser (100 Mana)">
             <svg class="w-6 h-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
             <span class="absolute bottom-0.5 right-1 text-[10px] font-bold text-amber-300">4</span>
             <span class="absolute top-0.5 left-1 text-[9px] font-mono-code text-sky-300">100</span>
@@ -242,7 +242,7 @@
 
           <div class="h-8 w-[1px] bg-slate-700/80 mx-0.5"></div>
 
-          <button id="btnD" onclick="triggerAbility('D')" class="ability-btn relative w-9 h-9 sm:w-10 sm:h-10 rounded-md bg-slate-900 border border-yellow-400/50 flex flex-col items-center justify-center overflow-hidden" title="[D] Flash">
+          <button id="btnD" onclick="triggerAbility('D')" class="ability-btn relative w-9 h-9 sm:w-10 sm:h-10 rounded-md bg-slate-900 border border-yellow-400/50 flex flex-col items-center justify-center overflow-hidden" title="[G] Flash">
             <span class="text-yellow-300 font-bold text-xs">⚡</span>
             <span class="absolute bottom-0 right-1 text-[9px] font-bold text-slate-300">D</span>
             <div id="cdOverlayD" class="hidden absolute inset-0 bg-slate-950/85 flex items-center justify-center font-mono-code font-bold text-xs text-white">0</div>
@@ -588,9 +588,6 @@
 
   <!-- FIREBASE REAL-TIME MULTIPLAYER & GAME ENGINE SCRIPT -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // =========================================================================
     // 1. WEB AUDIO SYNTHESIZER (Zero External Asset Dependencies)
@@ -639,86 +636,92 @@
     // =========================================================================
     // 2. FIREBASE MULTIPLAYER STATE & ROOM SYNCHRONIZATION
     // =========================================================================
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'aether-rift-moba';
-    let db = null;
-    let auth = null;
-    let currentUser = null;
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const lobbyHidden = () => document.getElementById('multiplayerLobbyModal').classList.contains('hidden');
 
     const netState = {
-      connected: false,
-      roomCode: null,
-      isHost: true,
-      myUid: 'local_' + Math.random().toString(36).substring(2, 8),
-      myName: 'Summoner',
-      myTeam: 'BLUE',
-      myChamp: 'LUX',
-      myLane: 'MID',
-      myReady: true,
-      fillBots: true,
-      roomData: null,
-      unsubRoom: null,
-      unsubPlayers: null,
-      unsubChat: null,
-      lastSyncSent: 0,
-      lastHostWorldSync: 0,
-      remotePlayers: {}, // uid -> player doc
-      processedEventIds: new Set(),
-      processedChatIds: new Set()
+      roomCode: null, isHost: true, pendingJoin: null, joinTimer: null,
+      myUid: 'p_' + Math.random().toString(36).slice(2, 8),
+      myName: 'Summoner', myTeam: 'BLUE', myChamp: 'LUX', myLane: 'MID',
+      myReady: true, fillBots: true,
+      remotePlayers: {}, processedEventIds: new Set(),
+      lastSyncSent: 0, lastHostWorldSync: 0
     };
 
-    // --- ADD THIS RIGHT BELOW netState ---
-    const localNetChannel = new BroadcastChannel('aether_rift_local_sync');
-
-    localNetChannel.onmessage = (event) => {
-      const { type, roomCode, payload } = event.data;
-      // Ignore messages from different room codes or from yourself
-      if (!netState.roomCode || roomCode !== netState.roomCode || payload?.uid === netState.myUid) return;
-
-      if (type === 'PLAYER_SYNC') {
-        netState.remotePlayers[payload.uid] = payload;
-        // Refresh lobby player list if still in lobby
-        if (typeof renderLobbyPlayers === 'function') renderLobbyPlayers();
-        if (typeof updateLobbyConnectionUI === 'function') updateLobbyConnectionUI(netState.roomCode, netState.isHost);
-      }
-      else if (type === 'START_MATCH') {
-        if (typeof launchMatchFromLobby === 'function') {
-          launchMatchFromLobby(false);
-        }
-      }
-    };
-
-    async function initFirebase() {
-      try {
-        if (typeof __firebase_config === 'undefined') {
-          logAwsEvent('GameLift', 'OfflineSandboxMode', { reason: 'No cloud config injected; local solo/bot simulation active' });
-          return;
-        }
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          const cred = await signInWithCustomToken(auth, __initial_auth_token);
-          currentUser = cred.user;
-        } else {
-          const cred = await signInAnonymously(auth);
-          currentUser = cred.user;
-        }
-        netState.myUid = currentUser.uid;
-        netState.connected = true;
-        logAwsEvent('GameLift', 'MultiplayerAuthReady', { uid: netState.myUid.slice(0, 10) + '...' });
-
-        // Check URL query parameter ?room=XXXXXX for instant friend invite join
-        const params = new URLSearchParams(window.location.search);
-        const inviteCode = params.get('room');
-        if (inviteCode && inviteCode.length === 6) {
-          document.getElementById('joinRoomCodeInput').value = inviteCode.toUpperCase();
-        }
-      } catch (err) {
-        console.warn('Firebase init fallback to local mode:', err);
-      }
+    // Same-browser multiplayer (open the page in two tabs). Internet play needs a server.
+    const channel = new BroadcastChannel('aether_rift_local_sync');
+    function netSend(type, payload = {}) {
+      if (!netState.roomCode) return;
+      channel.postMessage({ type, roomCode: netState.roomCode, from: netState.myUid, payload });
     }
+    function readProfile() {
+      netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Summoner').slice(0, 16);
+      netState.myChamp = document.getElementById('champSelectInput').value;
+      netState.myLane = document.getElementById('laneSelectInput').value;
+    }
+    function lobbyPayload() {
+      readProfile();
+      const sp = netState.myTeam === 'BLUE' ? { x: 360, y: 2240 } : { x: 2240, y: 360 };
+      return { uid: netState.myUid, name: netState.myName, team: netState.myTeam, champ: netState.myChamp,
+               lane: netState.myLane, ready: netState.myReady, x: sp.x, y: sp.y,
+               hp: 650, maxHp: 650, alive: true, level: 1 };
+    }
+    function announceSelf() { netSend('PLAYER_SYNC', lobbyPayload()); renderLobbyRoster(); }
+
+    channel.onmessage = ({ data }) => {
+      const { type, roomCode, from, payload } = data;
+      if (from === netState.myUid) return;
+
+      if (type === 'ROOM_INFO' && netState.pendingJoin === roomCode) {
+        clearTimeout(netState.joinTimer);
+        netState.pendingJoin = null; netState.roomCode = roomCode; netState.isHost = false;
+        document.getElementById('fillBotsCheckbox').checked = !!payload.fillBots;
+        document.getElementById('netRoleBadge').textContent = 'PEER CLIENT';
+        updateLobbyConnectionUI(roomCode, false);
+        announceSelf();
+        return;
+      }
+      if (roomCode !== netState.roomCode) return;
+
+      switch (type) {
+        case 'HELLO':
+          netState.remotePlayers[payload.uid] = payload;
+          announceSelf();
+          if (netState.isHost) netSend('ROOM_INFO', { fillBots: document.getElementById('fillBotsCheckbox').checked });
+          break;
+        case 'PLAYER_SYNC':
+          netState.remotePlayers[payload.uid] = payload;
+          if (payload.lastCast && !netState.processedEventIds.has(payload.lastCast.id)) {
+            netState.processedEventIds.add(payload.lastCast.id);
+            renderRemoteAbilityCast(payload, payload.lastCast);
+          }
+          syncRemoteChampionsIntoGame(); renderLobbyRoster(); updateSidebarRoster();
+          break;
+        case 'START_MATCH':
+          if (!lobbyHidden()) {
+            document.getElementById('fillBotsCheckbox').checked = !!payload.fillBots;
+            launchMatchFromLobby(false);
+          }
+          break;
+        case 'DAMAGE':
+          if (payload.targetUid === netState.myUid && gameState.player)
+            dealDamage({ name: payload.attackerName, kind: 'CHAMPION' }, gameState.player, payload.amount, '#f43f5e', true);
+          break;
+        case 'CHAT':
+          appendChatMessage(payload.sender, payload.team, payload.text);
+          break;
+        case 'WORLD':
+          if (!netState.isHost && gameState.running) {
+            gameState.blueKills = payload.blueKills; gameState.redKills = payload.redKills;
+            gameState.structures.forEach(st => {
+              const r = payload.structures[st.id]; if (!r) return;
+              const was = st.alive; st.hp = r.hp; st.alive = r.alive;
+              if (was && !st.alive && st.type === 'NEXUS') endMatch(st.team !== netState.myTeam);
+            });
+          }
+          break;
+      }
+    };
 
     function generateRoomCode() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -727,228 +730,29 @@
       return code;
     }
 
-    function getRoomDocRef(code) {
-      return doc(db, 'artifacts', appId, 'public', 'data', 'moba_rooms', code);
+    function createMultiplayerRoom() {
+      netState.roomCode = generateRoomCode();
+      netState.isHost = true; netState.myTeam = 'BLUE';
+      readProfile();
+      document.getElementById('netRoleBadge').textContent = 'HOST AUTH';
+      updateLobbyConnectionUI(netState.roomCode, true);
+      announceSelf();
+      logAwsEvent('FlexMatch', 'CustomRoomCreated', { roomCode: netState.roomCode, host: netState.myName });
     }
 
-    function getPlayersColRef(code) {
-      return collection(db, 'artifacts', appId, 'public', 'data', `moba_players_${code}`);
-    }
-
-    function getPlayerDocRef(code, uid) {
-      return doc(db, 'artifacts', appId, 'public', 'data', `moba_players_${code}`, uid);
-    }
-
-    function getChatColRef(code) {
-      return collection(db, 'artifacts', appId, 'public', 'data', `moba_chat_${code}`);
-    }
-
-    async function createMultiplayerRoom() {
-      const code = generateRoomCode();
-      netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Summoner').slice(0, 16);
-      netState.myChamp = document.getElementById('champSelectInput').value;
-      netState.myLane = document.getElementById('laneSelectInput').value;
-      netState.myTeam = 'BLUE';
-      netState.myReady = true;
-      netState.isHost = true;
-      netState.roomCode = code;
-
-      try {
-        // Store your local player state directly in memory so the lobby UI renders you
-        const localPlayer = {
-          uid: netState.myUid || 'local-host',
-          name: netState.myName,
-          team: netState.myTeam,
-          champ: netState.myChamp,
-          lane: netState.myLane,
-          ready: true,
-          x: 360,
-          y: 2240,
-          hp: 650,
-          maxHp: 650,
-          shield: 0,
-          mana: 400,
-          maxMana: 400,
-          level: 1,
-          kills: 0,
-          deaths: 0,
-          assists: 0,
-          alive: true,
-          inBush: false,
-          lastCast: null,
-          updatedAt: Date.now()
-        };
-
-        if (netState.players) {
-          netState.players[localPlayer.uid] = localPlayer;
+    function joinMultiplayerRoom(rawCode) {
+      const code = (rawCode || '').trim().toUpperCase();
+      if (code.length !== 6) return showLobbyError('Please enter a valid 6-character Room Code.');
+      netState.myTeam = 'RED';
+      netState.pendingJoin = code;
+      channel.postMessage({ type: 'HELLO', roomCode: code, from: netState.myUid, payload: lobbyPayload() });
+      clearTimeout(netState.joinTimer);
+      netState.joinTimer = setTimeout(() => {
+        if (netState.pendingJoin === code) {
+          netState.pendingJoin = null;
+          showLobbyError('Room "' + code + '" not found. Create it in another tab of this browser first.');
         }
-
-        /* Commented out all Firebase calls:
-        await setDoc(getRoomDocRef(code), { ... });
-        await setDoc(getPlayerDocRef(code, netState.myUid), localPlayer);
-        subscribeToRoom(code);
-        */
-
-        updateLobbyConnectionUI(code, true);
-        if (typeof renderLobbyPlayers === 'function') renderLobbyPlayers();
-        logAwsEvent('FlexMatch', 'CustomRoomCreated', { roomCode: code, host: netState.myName });
-      } catch (err) {
-        showLobbyError('Failed to create room: ' + err.message);
-      }
-    }
-
-    async function joinMultiplayerRoom(rawCode) {
-      // Bypassed the Firebase cloud check:
-      // if (!db || !currentUser) {
-      //   showLobbyError('Cloud networking unavailable in this preview.');
-      //   return;
-      // }
-      
-      const code = (rawCode || document.getElementById('room-input')?.value || '').trim().toUpperCase();
-      if (code.length !== 6) {
-        showLobbyError('Please enter a valid 6-character Room Code.');
-        return;
-      }
-
-      try {
-        /* Commented out Firebase database lookups and writes:
-        const snap = await getDoc(getRoomDocRef(code));
-        if (!snap.exists()) {
-          showLobbyError(`Room "${code}" not found. Double-check the code with your friend.`);
-          return;
-        }
-        const roomData = snap.data();
-        */
-
-        netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Player').slice(0, 16);
-        netState.myChamp = document.getElementById('champSelectInput').value;
-        netState.myLane = document.getElementById('laneSelectInput').value;
-        netState.isHost = false; // Joining player is a guest
-        netState.roomCode = code;
-        netState.myTeam = 'RED'; // Default joining team for local testing
-        netState.myReady = true;
-
-        const spawn = { x: 2240, y: 360 };
-
-        /*
-        await setDoc(getPlayerDocRef(code, netState.myUid), {
-          uid: netState.myUid,
-          name: netState.myName,
-          team: netState.myTeam,
-          champ: netState.myChamp,
-          lane: netState.myLane,
-          ready: true,
-          x: spawn.x,
-          y: spawn.y,
-          hp: 650,
-          maxHp: 650,
-          shield: 0,
-          mana: 400,
-          maxMana: 400,
-          level: 1,
-          kills: 0,
-          deaths: 0,
-          assists: 0,
-          alive: true,
-          inBush: false,
-          lastCast: null,
-          updatedAt: Date.now()
-        });
-
-        subscribeToRoom(code);
-        */
-
-        updateLobbyConnectionUI(code, netState.isHost);
-        console.log("Locally joined room:", code);
-
-      } catch (err) {
-        showLobbyError('Failed to join room: ' + err.message);
-      }
-    }
-
-    function subscribeToRoom(code) {
-      if (netState.unsubRoom) netState.unsubRoom();
-      if (netState.unsubPlayers) netState.unsubPlayers();
-      if (netState.unsubChat) netState.unsubChat();
-
-      // 1. Listen to Room Metadata & Host-Synced Structures/Events
-      netState.unsubRoom = onSnapshot(getRoomDocRef(code), (snap) => {
-        if (!snap.exists()) return;
-        const data = snap.data();
-        netState.roomData = data;
-        netState.isHost = data.hostUid === netState.myUid;
-
-        document.getElementById('fillBotsCheckbox').checked = !!data.fillBots;
-        document.getElementById('netRoleBadge').textContent = netState.isHost ? 'HOST AUTH' : 'PEER CLIENT';
-
-        // Start match automatically when host clicks Launch Match
-        if (data.status === 'IN_GAME' && !document.getElementById('multiplayerLobbyModal').classList.contains('hidden')) {
-          launchMatchFromLobby(false);
-        }
-
-        // Non-host peers sync authoritative scores & structure HPs from host
-        if (!netState.isHost && gameState.running) {
-          if (typeof data.blueKills === 'number') gameState.blueKills = data.blueKills;
-          if (typeof data.redKills === 'number') gameState.redKills = data.redKills;
-          if (data.structures) {
-            gameState.structures.forEach(st => {
-              const remoteSt = data.structures[st.id];
-              if (remoteSt) {
-                st.hp = remoteSt.hp;
-                st.alive = remoteSt.alive;
-              }
-            });
-          }
-        }
-
-        // Process broadcasted combat events (damage to local player, announcements)
-        if (Array.isArray(data.recentEvents)) {
-          data.recentEvents.forEach(ev => {
-            if (!ev || !ev.id || netState.processedEventIds.has(ev.id)) return;
-            netState.processedEventIds.add(ev.id);
-            if (ev.type === 'DAMAGE_PLAYER' && ev.targetUid === netState.myUid && gameState.player) {
-              dealDamage({ name: ev.attackerName || 'Enemy', kind: 'CHAMPION' }, gameState.player, ev.amount, '#f43f5e', true);
-            } else if (ev.type === 'ANNOUNCE' && ev.senderUid !== netState.myUid) {
-              showAnnouncement(ev.text, ev.color || 'text-amber-300');
-            }
-          });
-        }
-
-        renderLobbyRoster();
-      }, (err) => console.warn('Room listener error:', err));
-
-      // 2. Listen to All Connected Players in Real Time
-      netState.unsubPlayers = onSnapshot(getPlayersColRef(code), (snapshot) => {
-        const updatedMap = {};
-        snapshot.forEach(docSnap => {
-          const pData = docSnap.data();
-          updatedMap[pData.uid] = pData;
-
-          // Trigger remote spell visual effects when another player casts an ability
-          if (pData.uid !== netState.myUid && pData.lastCast && pData.lastCast.id) {
-            if (!netState.processedEventIds.has(pData.lastCast.id)) {
-              netState.processedEventIds.add(pData.lastCast.id);
-              renderRemoteAbilityCast(pData, pData.lastCast);
-            }
-          }
-        });
-        netState.remotePlayers = updatedMap;
-        syncRemoteChampionsIntoGame();
-        renderLobbyRoster();
-        updateSidebarRoster();
-      }, (err) => console.warn('Players listener error:', err));
-
-      // 3. Listen to Live Match Chat
-      netState.unsubChat = onSnapshot(getChatColRef(code), (snapshot) => {
-        const msgs = [];
-        snapshot.forEach(d => msgs.push({ id: d.id, ...d.data() }));
-        msgs.sort((a, b) => (a.ts || 0) - (b.ts || 0));
-        msgs.slice(-25).forEach(m => {
-          if (netState.processedChatIds.has(m.id)) return;
-          netState.processedChatIds.add(m.id);
-          appendChatMessage(m.sender, m.team, m.text);
-        });
-      }, (err) => console.warn('Chat listener error:', err));
+      }, 900);
     }
 
     function updateLobbyConnectionUI(code, isHost) {
@@ -970,128 +774,49 @@
     function renderLobbyRoster() {
       const blueList = document.getElementById('lobbyBlueList');
       const redList = document.getElementById('lobbyRedList');
-      if (!blueList || !redList) return;
-
-      const players = Object.values(netState.remotePlayers);
-      if (players.length === 0) {
-        // Local preview before room creation
-        players.push({
-          uid: netState.myUid,
-          name: document.getElementById('summonerNameInput').value || 'Summoner',
-          team: netState.myTeam,
-          champ: document.getElementById('champSelectInput').value,
-          lane: document.getElementById('laneSelectInput').value,
-          ready: netState.myReady,
-          isHuman: true
-        });
-      }
-
-      const blueHumans = players.filter(p => p.team === 'BLUE');
-      const redHumans = players.filter(p => p.team === 'RED');
-
+      if (!blueList || !redList || lobbyHidden()) return;
+      const me = lobbyPayload(); me.ready = netState.myReady;
+      const players = [me, ...Object.values(netState.remotePlayers)];
+      const blue = players.filter(p => p.team === 'BLUE');
+      const red = players.filter(p => p.team === 'RED');
       document.getElementById('lobbyPlayerCount').textContent = players.length;
-      document.getElementById('blueTeamCount').textContent = `${blueHumans.length} / 5`;
-      document.getElementById('redTeamCount').textContent = `${redHumans.length} / 5`;
-
-      const renderSlot = (p, isBot = false) => `
+      document.getElementById('blueTeamCount').textContent = blue.length + ' / 5';
+      document.getElementById('redTeamCount').textContent = red.length + ' / 5';
+      const slot = p => `
         <div class="flex items-center justify-between px-2.5 py-1.5 rounded bg-slate-950/80 border ${p.uid === netState.myUid ? 'border-amber-400/60' : 'border-slate-800'}">
           <div class="flex items-center gap-2">
-            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold ${isBot ? 'bg-slate-800 text-slate-400' : 'bg-emerald-500/20 text-emerald-300'}">
-              ${isBot ? 'BOT' : 'HUMAN'}
-            </span>
-            <span class="font-semibold text-slate-200">${p.name}</span>
-            <span class="text-[10px] text-slate-400">(${p.champ} • ${p.lane})</span>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300">HUMAN</span>
+            <span class="font-semibold text-slate-200">${esc(p.name)}</span>
+            <span class="text-[10px] text-slate-400">(${esc(p.champ)} • ${esc(p.lane)})</span>
           </div>
-          <span class="text-[10px] font-mono-code ${p.ready ? 'text-emerald-400' : 'text-amber-400'}">
-            ${p.ready ? 'READY' : 'WAITING'}
-          </span>
-        </div>
-      `;
-
-      blueList.innerHTML = blueHumans.map(p => renderSlot(p, false)).join('') || '<div class="text-slate-500 italic text-[11px]">No human players on Blue</div>';
-      redList.innerHTML = redHumans.map(p => renderSlot(p, false)).join('') || '<div class="text-slate-500 italic text-[11px]">No human players on Red (Bots will fill)</div>';
+          <span class="text-[10px] font-mono-code ${p.ready ? 'text-emerald-400' : 'text-amber-400'}">${p.ready ? 'READY' : 'WAITING'}</span>
+        </div>`;
+      blueList.innerHTML = blue.map(slot).join('') || '<div class="text-slate-500 italic text-[11px]">No human players on Blue</div>';
+      redList.innerHTML = red.map(slot).join('') || '<div class="text-slate-500 italic text-[11px]">No human players on Red (Bots will fill)</div>';
     }
 
-    // Push local player state to Firestore at ~12Hz for smooth over-the-network play
-    async function pushLocalPlayerState(castEvent = null) {
-      if (!db || !netState.roomCode || !gameState.player) return;
+    function pushLocalPlayerState(castEvent = null) {
+      if (!netState.roomCode || !gameState.player) return;
       const now = Date.now();
       if (!castEvent && now - netState.lastSyncSent < 85) return;
       netState.lastSyncSent = now;
-
       const p = gameState.player;
-      const payload = {
-        uid: netState.myUid,
-        name: netState.myName,
-        team: netState.myTeam,
-        champ: netState.myChamp,
-        lane: netState.myLane,
-        x: Math.round(p.x),
-        y: Math.round(p.y),
-        hp: Math.round(p.hp),
-        maxHp: Math.round(p.maxHp),
-        shield: Math.round(p.shield),
-        mana: Math.round(p.mana),
-        maxMana: Math.round(p.maxMana),
-        level: p.level,
-        kills: p.kills,
-        deaths: p.deaths,
-        assists: p.assists,
-        alive: p.alive,
-        inBush: p.inBush,
-        updatedAt: now
-      };
+      const payload = { uid: netState.myUid, name: netState.myName, team: netState.myTeam, champ: netState.myChamp,
+        lane: netState.myLane, ready: true, x: Math.round(p.x), y: Math.round(p.y), hp: Math.round(p.hp),
+        maxHp: Math.round(p.maxHp), shield: Math.round(p.shield), level: p.level, kills: p.kills,
+        deaths: p.deaths, alive: p.alive, inBush: p.inBush };
       if (castEvent) payload.lastCast = castEvent;
-
-      try {
-        await setDoc(getPlayerDocRef(netState.roomCode, netState.myUid), payload, { merge: true });
-      } catch (_) {}
+      netSend('PLAYER_SYNC', payload);
     }
 
-    // Host broadcasts authoritative turret/nexus HPs and kills every ~450ms
-    async function pushHostWorldState(extraEvent = null) {
-      if (!db || !netState.roomCode || !netState.isHost) return;
+    function pushHostWorldState() {
+      if (!netState.roomCode || !netState.isHost) return;
       const now = Date.now();
-      if (!extraEvent && now - netState.lastHostWorldSync < 450) return;
+      if (now - netState.lastHostWorldSync < 450) return;
       netState.lastHostWorldSync = now;
-
-      const structMap = {};
-      gameState.structures.forEach(s => {
-        structMap[s.id] = { hp: Math.round(s.hp), alive: s.alive };
-      });
-
-      const updatePayload = {
-        blueKills: gameState.blueKills,
-        redKills: gameState.redKills,
-        matchTime: Math.round(gameState.matchTime),
-        structures: structMap
-      };
-
-      if (extraEvent) {
-        const prev = (netState.roomData && Array.isArray(netState.roomData.recentEvents))
-          ? netState.roomData.recentEvents.slice(-8)
-          : [];
-        updatePayload.recentEvents = [...prev, extraEvent];
-      }
-
-      try {
-        await updateDoc(getRoomDocRef(netState.roomCode), updatePayload);
-      } catch (_) {}
-    }
-
-    // Send a damage or announcement event over the room doc
-    async function broadcastNetworkEvent(evObj) {
-      if (!db || !netState.roomCode) return;
-      const ev = { id: `${netState.myUid}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, senderUid: netState.myUid, ...evObj };
-      netState.processedEventIds.add(ev.id);
-      try {
-        const prev = (netState.roomData && Array.isArray(netState.roomData.recentEvents))
-          ? netState.roomData.recentEvents.slice(-8)
-          : [];
-        await updateDoc(getRoomDocRef(netState.roomCode), {
-          recentEvents: [...prev, ev]
-        });
-      } catch (_) {}
+      const structures = {};
+      gameState.structures.forEach(st => structures[st.id] = { hp: Math.round(st.hp), alive: st.alive });
+      netSend('WORLD', { blueKills: gameState.blueKills, redKills: gameState.redKills, structures });
     }
 
     // =========================================================================
@@ -1194,7 +919,7 @@
       card.className = 'p-2 rounded bg-slate-900/90 border border-slate-800 space-y-1';
       card.innerHTML = `
         <div class="flex items-center justify-between">
-          <span class="px-1.5 py-0.2 rounded border text-[9px] font-bold ${cls}">${service}</span>
+          <span class="px-1.5 py-0.5 rounded border text-[9px] font-bold ${cls}">${service}</span>
           <span class="text-slate-500 text-[9px]">${new Date().toISOString().substr(11, 8)}</span>
         </div>
         <div class="text-slate-200 font-semibold">${eventType}</div>
@@ -1218,7 +943,7 @@
       if (!box) return;
       const line = document.createElement('div');
       const teamColor = team === 'BLUE' ? 'text-sky-400' : team === 'RED' ? 'text-rose-400' : 'text-amber-300';
-      line.innerHTML = `<span class="font-bold ${teamColor}">[${sender}]:</span> <span class="text-slate-200"></span>`;
+      line.innerHTML = `<span class="font-bold ${teamColor}">[${esc(sender)}]:</span> <span class="text-slate-200"></span>`;
       line.querySelector('span:last-child').textContent = text;
       box.appendChild(line);
       box.scrollTop = box.scrollHeight;
@@ -1725,12 +1450,7 @@
       // If hitting a remote human player, transmit the damage packet over Firestore
       if (target.isRemoteHuman && !fromNetwork) {
         const targetUid = target.id.replace('remote_', '');
-        broadcastNetworkEvent({
-          type: 'DAMAGE_PLAYER',
-          targetUid,
-          attackerName: attacker ? attacker.name : 'Enemy',
-          amount: Math.round(rawDamage)
-        });
+        netSend('DAMAGE', { targetUid, attackerName: attacker ? attacker.name : 'Enemy', amount: Math.round(rawDamage) });
         spawnFloatingText(target.x, target.y - 26, `-${Math.round(rawDamage)}`, textColor);
         AudioEngine.hit();
         return;
@@ -1802,7 +1522,7 @@
           }
         }
 
-        const killerName = killer ? killer.name : 'Turret';
+        const killerName = (killer && killer.name) || 'Turret';
         const announceText = `${killerName.toUpperCase()} HAS SLAIN ${victim.name.toUpperCase()}!`;
         showAnnouncement(announceText, victim.team === TEAM_RED ? 'text-sky-400' : 'text-rose-400');
 
@@ -2641,17 +2361,20 @@
 
       if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
+      if (!lobbyHidden()) return;
       gameState.keys[e.key] = true;
       const k = e.key.toUpperCase();
-      if (['Q', 'R', 'F'].includes(k) && !e.ctrlKey && !e.metaKey) {
+      if (['Q', 'E', 'R', 'F'].includes(k) && !e.ctrlKey && !e.metaKey) {
         window.triggerAbility(k);
       }
+      if (k === 'G') window.triggerAbility('D');
       if (e.key === '1') window.triggerAbility('Q');
       if (e.key === '2') window.triggerAbility('W');
       if (e.key === '3') window.triggerAbility('E');
       if (e.key === '4') window.triggerAbility('R');
       if (k === 'B') document.getElementById('shopPanel').classList.toggle('hidden');
       if (k === 'Y' || e.key === ' ') {
+        e.preventDefault();
         gameState.cameraLocked = !gameState.cameraLocked;
         document.getElementById('camLockLabel').textContent = gameState.cameraLocked ? 'Locked (Y)' : 'Free (Y)';
       }
@@ -2661,24 +2384,13 @@
       gameState.keys[e.key] = false;
     });
 
-    async function sendInGameChat() {
+    function sendInGameChat() {
       const input = document.getElementById('chatInput');
       const text = input.value.trim();
       if (!text) return;
       input.value = '';
-
-      if (db && netState.roomCode) {
-        try {
-          await addDoc(getChatColRef(netState.roomCode), {
-            sender: netState.myName,
-            team: netState.myTeam,
-            text,
-            ts: Date.now()
-          });
-        } catch (_) {}
-      } else {
-        appendChatMessage(netState.myName, netState.myTeam, text);
-      }
+      appendChatMessage(netState.myName, netState.myTeam, text);
+      netSend('CHAT', { sender: netState.myName, team: netState.myTeam, text });
     }
     document.getElementById('chatSendBtn').onclick = () => {
       sendInGameChat();
@@ -2705,56 +2417,27 @@
       setTimeout(() => fb.classList.add('hidden'), 3000);
     };
 
-    document.getElementById('switchTeamBtn').onclick = async () => {
+    document.getElementById('switchTeamBtn').onclick = () => {
       netState.myTeam = netState.myTeam === 'BLUE' ? 'RED' : 'BLUE';
-      if (db && netState.roomCode) {
-        try {
-          await updateDoc(getPlayerDocRef(netState.roomCode, netState.myUid), { team: netState.myTeam });
-        } catch (_) {}
-      }
-      renderLobbyRoster();
+      announceSelf();
     };
-
-    document.getElementById('toggleReadyBtn').onclick = async () => {
+    document.getElementById('toggleReadyBtn').onclick = () => {
       netState.myReady = !netState.myReady;
       document.getElementById('toggleReadyBtn').textContent = netState.myReady ? '✓ Ready' : 'Not Ready';
-      if (db && netState.roomCode) {
-        try {
-          await updateDoc(getPlayerDocRef(netState.roomCode, netState.myUid), { ready: netState.myReady });
-        } catch (_) {}
-      }
-      renderLobbyRoster();
+      announceSelf();
     };
+    document.getElementById('fillBotsCheckbox').onchange = e => { netState.fillBots = e.target.checked; };
 
-    document.getElementById('fillBotsCheckbox').onchange = async (e) => {
-      netState.fillBots = e.target.checked;
-      if (db && netState.roomCode && netState.isHost) {
-        try {
-          await updateDoc(getRoomDocRef(netState.roomCode), { fillBots: netState.fillBots });
-        } catch (_) {}
-      }
-    };
-
-    async function launchMatchFromLobby(broadcastStart = true) {
-      netState.myName = (document.getElementById('summonerNameInput').value.trim() || 'Summoner').slice(0, 16);
-      netState.myChamp = document.getElementById('champSelectInput').value;
-      netState.myLane = document.getElementById('laneSelectInput').value;
-
-      if (broadcastStart && db && netState.roomCode && netState.isHost) {
-        try {
-          await updateDoc(getRoomDocRef(netState.roomCode), {
-            status: 'IN_GAME',
-            fillBots: document.getElementById('fillBotsCheckbox').checked
-          });
-        } catch (_) {}
-      }
-
+    function launchMatchFromLobby(broadcastStart = true) {
+      readProfile();
+      if (broadcastStart && netState.roomCode && netState.isHost)
+        netSend('START_MATCH', { fillBots: document.getElementById('fillBotsCheckbox').checked });
       document.getElementById('multiplayerLobbyModal').classList.add('hidden');
       initMatch();
     }
 
     document.getElementById('startMultiplayerMatchBtn').onclick = () => launchMatchFromLobby(true);
-    document.getElementById('closeLobbyBtn').onclick = () => launchMatchFromLobby(false);
+    document.getElementById('closeLobbyBtn').onclick = () => document.getElementById('multiplayerLobbyModal').classList.add('hidden');
     document.getElementById('openLobbyBtn').onclick = () => {
       renderLobbyRoster();
       document.getElementById('multiplayerLobbyModal').classList.remove('hidden');
@@ -2784,7 +2467,7 @@
     };
     document.getElementById('toggleAwsDrawerBtn').onclick = () => {
       const drawer = document.getElementById('awsTelemetryDrawer');
-      drawer.classList.toggle('hidden');
+      drawer.style.display = getComputedStyle(drawer).display === 'none' ? 'flex' : 'none';
       setTimeout(resizeCanvas, 50);
     };
     document.getElementById('clearLogsBtn').onclick = () => { document.getElementById('awsEventLog').innerHTML = ''; };
@@ -2899,7 +2582,7 @@
 
     window.onload = async function () {
       resizeCanvas();
-      await initFirebase();
+      
       renderLobbyRoster();
       initMatch();
       requestAnimationFrame(gameLoop);

@@ -1806,8 +1806,12 @@
         const announceText = `${killerName.toUpperCase()} HAS SLAIN ${victim.name.toUpperCase()}!`;
         showAnnouncement(announceText, victim.team === TEAM_RED ? 'text-sky-400' : 'text-rose-400');
 
-        if (netState.roomCode) {
-          broadcastNetworkEvent({ type: 'ANNOUNCE', text: announceText, color: 'text-amber-300' });
+        // Replaced broken cloud broadcast with local BroadcastChannel sync
+        if (netState.roomCode && typeof localNetChannel !== 'undefined') {
+          localNetChannel.postMessage({
+            type: 'PLAYER_DIED',
+            payload: { uid: victim.uid || netState.myUid }
+          });
         }
 
         logAwsEvent('EventBridge', 'ChampionEliminated', {

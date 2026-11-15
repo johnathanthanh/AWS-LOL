@@ -649,7 +649,24 @@
     };
 
     // Same-browser multiplayer (open the page in two tabs). Internet play needs a server.
-    const channel = new BroadcastChannel('aether_rift_local_sync');
+    const WS_URL = 'https://aether-relay-hz6d.onrender.com/';
+    const wsQueue = [];
+    let sock;
+    const channel = {
+      onmessage: null,
+      postMessage(obj) {
+        const s = JSON.stringify(obj);
+        if (sock && sock.readyState === 1) sock.send(s); else wsQueue.push(s);
+      }
+    };
+    function connectWS() {
+      sock = new WebSocket(WS_URL);
+      sock.onopen = () => { wsQueue.splice(0).forEach(m => sock.send(m)); };
+      sock.onmessage = e => { try { channel.onmessage && channel.onmessage({ data: JSON.parse(e.data) }); } catch (_) {} };
+      sock.onclose = () => setTimeout(connectWS, 1500);
+    }
+    connectWS();
+    
     function netSend(type, payload = {}) {
       if (!netState.roomCode) return;
       channel.postMessage({ type, roomCode: netState.roomCode, from: netState.myUid, payload });
